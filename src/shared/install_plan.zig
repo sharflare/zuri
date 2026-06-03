@@ -1,0 +1,33 @@
+const std = @import("std");
+const dl = @import("download.zig");
+const xbps = @import("xbps.zig");
+
+pub const PlanMode = enum {
+    install,
+    update,
+};
+
+pub const InstallPlan = struct {
+    packages: []const dl.PackageDownload,
+    repo_url: []const u8,
+    rootdir: ?[]const u8 = null,
+    cachedir: []const u8 = "/var/cache/xbps",
+    dry_run: bool = false,
+    yes: bool = false,
+    xhp: *xbps.Handle,
+    mode: PlanMode = .install,
+};
+
+pub fn deinitPlan(plan: *InstallPlan, allocator: std.mem.Allocator) void {
+    for (plan.packages) |p| {
+        allocator.free(p.name);
+        allocator.free(p.version);
+        allocator.free(p.host);
+        allocator.free(p.path);
+        allocator.free(p.dest_path);
+        if (p.sha256.len > 0) allocator.free(p.sha256);
+    }
+    allocator.free(plan.packages);
+    allocator.free(plan.repo_url);
+    xbps.end(plan.xhp);
+}

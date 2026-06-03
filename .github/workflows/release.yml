@@ -1,0 +1,77 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            arch: x86_64
+            libc: glibc
+            container: ghcr.io/void-linux/void-glibc-full:latest
+          - os: ubuntu-24.04
+            arch: x86_64
+            libc: musl
+            container: ghcr.io/void-linux/void-musl-full:latest
+          - os: ubuntu-24.04-arm
+            arch: aarch64
+            libc: glibc
+            container: ghcr.io/void-linux/void-glibc-full:latest
+          - os: ubuntu-24.04-arm
+            arch: aarch64
+            libc: musl
+            container: ghcr.io/void-linux/void-musl-full:latest
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build inside Void Linux container
+        run: |
+          docker run --rm \
+            -e HOST_UID=$(id -u) \
+            -e HOST_GID=$(id -g) \
+            -v ${{ github.workspace }}:/workspace \
+            -w /workspace \
+            ${{ matrix.container }} \
+            sh -c '
+              xbps-install -Syu -y
+              xbps-install -y base-devel libxbps-devel curl mise
+              
+              export PATH="/root/.local/share/mise/shims:$PATH"
+              mise trust
+              mise use -g zig@0.16.0
+              
+              zig build --release=fast -Dcpu=baseline
+              
+              mv zig-out/bin/zuri zig-out/bin/zuri-${{ matrix.arch }}-${{ matrix.libc }}
+              
+              chown -R $HOST_UID:$HOST_GID .
+            '
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zuri-${{ matrix.arch }}-${{ matrix.libc }}
+          path: zig-out/bin/zuri-${{ matrix.arch }}-${{ matrix.libc }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Upload assets to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: zuri-*/zuri-*
+          token: ${{ secrets.GITHUB_TOKEN }}
