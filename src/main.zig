@@ -16,6 +16,7 @@ const xbps = @import("shared/xbps.zig");
 
 const install_exec = @import("cmd/install/main.zig");
 const install_rslv = @import("cmd/install/resolve.zig");
+const remove_exec = @import("cmd/remove/main.zig");
 const update_exec = @import("cmd/update/main.zig");
 const update_rslv = @import("cmd/update/resolve.zig");
 
@@ -68,8 +69,11 @@ pub fn main(init: std.process.Init) !void {
             try install_exec.exec(gpa, p, init.environ_map);
         },
         .remove => |rm| {
-            _ = rm.flags.yes;
-            for (rm.positionals) |pkg| _ = pkg;
+            if (!result.flags.@"dry-run" and std.os.linux.geteuid() != 0) {
+                try stderr.print("error: remove requires root (try 'sudo zuri remove')\n", .{});
+                return;
+            }
+            try remove_exec.exec(gpa, init.io, rm.positionals, rm.flags.@"keep-deps", result.flags.@"dry-run", rm.flags.yes, result.flags.root);
         },
         .update => |up| {
             if (!result.flags.@"dry-run" and std.os.linux.geteuid() != 0) {

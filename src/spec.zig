@@ -16,6 +16,7 @@ pub const remove = cli.Command{
     .description = "Remove one or more packages",
     .flags = &.{
         cli.Flag{ .long = "yes", .short = 'y', .kind = .bool, .description = "Skip confirmation prompt" },
+        cli.Flag{ .long = "keep-deps", .short = 'd', .kind = .bool, .description = "Do not remove orphaned dependencies" },
     },
     .positionals = &.{
         cli.Positional{ .name = "pkg", .description = "Package(s) to remove", .variadic = true },

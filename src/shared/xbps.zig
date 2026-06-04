@@ -32,6 +32,8 @@ extern fn zuri_xbps_end(*Handle) void;
 extern fn xbps_pkgdb_lock(*Handle) c_int;
 extern fn xbps_pkgdb_unlock(*Handle) void;
 extern fn xbps_transaction_install_pkg(*Handle, pkg: [*:0]const u8, force: bool) c_int;
+extern fn xbps_transaction_remove_pkg(*Handle, pkgname: [*:0]const u8, recursive: bool) c_int;
+extern fn xbps_transaction_autoremove_pkgs(*Handle) c_int;
 extern fn xbps_transaction_prepare(*Handle) c_int;
 extern fn xbps_transaction_commit(*Handle) c_int;
 extern fn xbps_configure_packages(*Handle, ignpkgs: ?*anyopaque) c_int;
@@ -62,30 +64,29 @@ pub fn end(xhp: *Handle) void {
 
 fn check(rc: c_int) !void {
     if (rc == 0) return;
-    if (rc == -1) return error.Unexpected;
-    const e = @as(std.os.linux.E, @enumFromInt(rc));
-    switch (e) {
-        .PERM, .ACCES => return error.AccessDenied,
-        .BUSY => return error.Busy,
-        .EXIST => return error.AlreadyExists,
-        .NOENT => return error.NotFound,
-        .NOMEM => return error.OutOfMemory,
-        .NXIO => return error.NoDevice,
-        .NODEV => return error.NoDevice,
-        .INVAL => return error.InvalidArgument,
-        .AGAIN => return error.WouldBlock,
-        .NOSPC => return error.NoSpaceLeft,
-        .IO => return error.IOError,
-        .ROFS => return error.AccessDenied,
-        .OPNOTSUPP => return error.NotSupported,
-        else => {
-            std.log.err("xbps error: {s} ({d})", .{ @tagName(e), rc });
-            return error.Unexpected;
+    return switch (rc) {
+        1, 13 => error.AccessDenied, // EPERM, EACCES
+        16 => error.Busy, // EBUSY
+        17 => error.AlreadyExists, // EEXIST
+        2 => error.NotFound, // ENOENT
+        12 => error.OutOfMemory, // ENOMEM
+        6 => error.NoDevice, // ENXIO
+        19 => error.NoDevice, // ENODEV
+        22 => error.InvalidArgument, // EINVAL
+        11 => error.WouldBlock, // EAGAIN
+        28 => error.NoSpaceLeft, // ENOSPC
+        5 => error.IOError, // EIO
+        30 => error.AccessDenied, // EROFS
+        95 => error.NotSupported, // EOPNOTSUPP
+        -1 => error.Unexpected,
+        else => blk: {
+            std.log.err("xbps error: {d}", .{rc});
+            break :blk error.Unexpected;
         },
-    }
+    };
 }
 
-// --- Pkgdb ---
+// --- Lock ---
 
 pub fn lockPkgdb(xhp: *Handle) !void {
     try check(xbps_pkgdb_lock(xhp));
@@ -96,6 +97,18 @@ pub fn unlockPkgdb(xhp: *Handle) void {
 }
 
 // --- Transaction ---
+
+pub fn removePkg(xhp: *Handle, pkg: []const u8, recursive: bool) !void {
+    if (pkg.len > 1024) return error.NameTooLong;
+    var buf: [1025]u8 = undefined;
+    @memcpy(buf[0..pkg.len], pkg);
+    buf[pkg.len] = 0;
+    try check(xbps_transaction_remove_pkg(xhp, @ptrCast(&buf), recursive));
+}
+
+pub fn autoRemovePkgs(xhp: *Handle) !void {
+    try check(xbps_transaction_autoremove_pkgs(xhp));
+}
 
 pub fn installPkg(xhp: *Handle, pkg: []const u8, force: bool) !void {
     if (pkg.len > 1024) return error.NameTooLong;

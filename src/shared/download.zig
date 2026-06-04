@@ -52,7 +52,7 @@ pub fn fetchAll(
     if (mp.anyFailed()) return error.DownloadFailed;
 }
 
-// --- Single Package Fetch ---
+// --- Single Package ---
 
 fn fetchPackage(
     dl: PackageDownload,

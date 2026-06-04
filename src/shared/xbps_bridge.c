@@ -77,7 +77,7 @@ ZuriPkgDownload *zuri_transaction_pkgs(struct xbps_handle *xhp, size_t *count) {
       continue;
 
     xbps_trans_type_t trans_type = xbps_transaction_pkg_type(pkg);
-    if (trans_type != XBPS_TRANS_INSTALL && trans_type != XBPS_TRANS_UPDATE)
+    if (trans_type != XBPS_TRANS_INSTALL && trans_type != XBPS_TRANS_UPDATE && trans_type != XBPS_TRANS_REMOVE)
       continue;
 
     const char *pkgver = NULL;
