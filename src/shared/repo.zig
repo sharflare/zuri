@@ -1,4 +1,7 @@
 const std = @import("std");
+const builtin = @import("builtin");
+
+// --- Repo URL ---
 
 pub const RepoUrl = struct {
     host: []const u8,
@@ -27,23 +30,29 @@ pub const RepoUrl = struct {
     }
 };
 
+// --- Repo Dir ---
+
 const default_repo_prefix = "https://repo-default.voidlinux.org/current/";
+
+fn getRepoDir() ?[]const u8 {
+    return switch (builtin.cpu.arch) {
+        .aarch64 => "aarch64",
+        .x86_64 => switch (builtin.abi) {
+            .musl => "musl",
+            .gnu => "",
+            else => null,
+        },
+        else => null,
+    };
+}
 
 pub fn getRepoUrl(env: std.process.Environ, stderr: anytype, buf: *[256]u8) ![:0]const u8 {
     if (env.getPosix("ZURI_REPO_URL")) |env_val| return env_val;
 
-    var uts: std.os.linux.utsname = undefined;
-    if (std.os.linux.uname(&uts) != 0) return error.Unexpected;
-    const machine = std.mem.sliceTo(&uts.machine, 0);
-
-    const repo_dir = if (std.mem.startsWith(u8, machine, "aarch64"))
-        "aarch64"
-    else if (std.mem.eql(u8, machine, "x86_64"))
-        ""
-    else if (std.mem.eql(u8, machine, "x86_64-musl"))
-        "musl"
-    else {
-        try stderr.print("error: unsupported architecture '{s}'\n", .{machine});
+    const repo_dir = getRepoDir() orelse {
+        try stderr.print("error: unsupported architecture ({s}, {s})\n", .{
+            @tagName(builtin.cpu.arch), @tagName(builtin.abi),
+        });
         return error.UnsupportedArchitecture;
     };
 
