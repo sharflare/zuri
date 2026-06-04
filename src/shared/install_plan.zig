@@ -37,6 +37,7 @@ pub fn deinit(plan: *Plan, allocator: std.mem.Allocator) void {
         allocator.free(p.path);
         allocator.free(p.dest_path);
         if (p.sha256.len > 0) allocator.free(p.sha256);
+        allocator.free(p.local_path);
     }
     allocator.free(plan.packages);
     allocator.free(plan.repo_url);
@@ -229,6 +230,7 @@ pub fn downloadAndCommit(
     }
 
     for (plan.packages) |pkg| {
+        if (pkg.local_path.len > 0) continue;
         if (!dl.destCached(pkg, io)) {
             stderrPrint(io, "{s}: cache corrupted — re-run to re-download\n", .{pkg.name});
             return error.CacheCorrupted;

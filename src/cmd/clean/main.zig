@@ -63,6 +63,7 @@ pub fn exec(allocator: std.mem.Allocator, io: std.Io, all_flag: bool, orphans: b
                 allocator.free(p.pkgver);
                 allocator.free(p.filename);
                 allocator.free(p.sha256);
+                allocator.free(p.local_path);
             }
             allocator.free(pkg_metas);
         }

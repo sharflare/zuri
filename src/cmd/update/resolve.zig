@@ -11,7 +11,6 @@ pub fn rslvUpdate(
     io: std.Io,
     repo_url: [:0]const u8,
 ) !install_plan.Plan {
-    _ = io;
     const parsed = try repo.RepoUrl.parse(repo_url);
     const cachedir = "/var/cache/xbps";
 
@@ -42,11 +41,12 @@ pub fn rslvUpdate(
             allocator.free(p.pkgver);
             allocator.free(p.filename);
             allocator.free(p.sha256);
+            allocator.free(p.local_path);
         }
         allocator.free(pkg_metas);
     }
 
-    const downloads = try shared_resolve.buildDls(allocator, parsed, cachedir, pkg_metas);
+    const downloads = try shared_resolve.buildDls(allocator, io, parsed, cachedir, pkg_metas);
 
     return install_plan.Plan{
         .packages = downloads,

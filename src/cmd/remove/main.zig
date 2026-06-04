@@ -42,6 +42,7 @@ pub fn exec(gpa: std.mem.Allocator, io: std.Io, pkg_names: []const []const u8, k
             gpa.free(p.pkgver);
             gpa.free(p.filename);
             gpa.free(p.sha256);
+            gpa.free(p.local_path);
         }
         gpa.free(pkg_metas);
     }

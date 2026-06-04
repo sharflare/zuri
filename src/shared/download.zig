@@ -13,6 +13,7 @@ pub const PackageDownload = struct {
     size: u64,
     dest_path: []const u8,
     sha256: []const u8,
+    local_path: []const u8,
 };
 
 pub const DownloadConfig = struct {
@@ -87,6 +88,14 @@ fn fetchPackage(
 ) void {
     if (cancelled.load(.monotonic) or shutdown.isCancelled()) {
         mp.setFailed(idx);
+        return;
+    }
+
+    // Local packages do not need downloading
+    if (dl.local_path.len > 0) {
+        mp.setTotal(idx, dl.size);
+        mp.setCurrent(idx, dl.size);
+        mp.setDone(idx);
         return;
     }
 

@@ -63,6 +63,7 @@ typedef struct {
   char *filename;
   char *sha256;
   uint64_t size;
+  char *local_path;
 } ZuriPkgDownload;
 
 ZuriPkgDownload *zuri_transaction_pkgs(struct xbps_handle *xhp, size_t *count) {
@@ -116,6 +117,12 @@ ZuriPkgDownload *zuri_transaction_pkgs(struct xbps_handle *xhp, size_t *count) {
     uint64_t fsz = 0;
     xbps_dictionary_get_uint64(pkg, "filename-size", &fsz);
 
+    const char *local_path = NULL;
+    result[out].local_path = NULL;
+    if (xbps_dictionary_get_cstring_nocopy(pkg, "local-path", &local_path) && local_path) {
+      result[out].local_path = strdup(local_path);
+    }
+
     result[out].pkgver = strdup(pkgver);
     result[out].filename = strdup(fname);
     result[out].sha256 = sha ? strdup(sha) : strdup("");
@@ -133,6 +140,7 @@ void zuri_free_pkg_downloads(ZuriPkgDownload *arr, size_t count) {
     free(arr[i].pkgver);
     free(arr[i].filename);
     free(arr[i].sha256);
+    free(arr[i].local_path);
   }
   free(arr);
 }
@@ -346,6 +354,32 @@ void zuri_free_pkg_info(ZuriPkgInfo *info) {
   free(info->license);
   free(info->repository);
   free(info);
+}
+
+// --- Local package metadata ---
+
+char *zuri_binpkg_pkgver(const char *path) {
+    xbps_dictionary_t meta = xbps_archive_fetch_plist(path, "/props.plist");
+    if (!meta) return NULL;
+    const char *pkgver = NULL;
+    xbps_dictionary_get_cstring_nocopy(meta, "pkgver", &pkgver);
+    char *result = pkgver ? strdup(pkgver) : NULL;
+    xbps_object_release(meta);
+    return result;
+}
+
+char *zuri_binpkg_arch(const char *path) {
+    xbps_dictionary_t meta = xbps_archive_fetch_plist(path, "/props.plist");
+    if (!meta) return NULL;
+    const char *arch = NULL;
+    xbps_dictionary_get_cstring_nocopy(meta, "architecture", &arch);
+    char *result = arch ? strdup(arch) : NULL;
+    xbps_object_release(meta);
+    return result;
+}
+
+void zuri_free_str(void *ptr) {
+    free(ptr);
 }
 
 // --- StdErr ---

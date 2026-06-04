@@ -272,6 +272,35 @@ pub fn stderrOn() void {
     zuri_stderr_restore();
 }
 
+// --- Local pkg metadata ---
+
+extern fn zuri_binpkg_pkgver(path: [*:0]const u8) ?*anyopaque;
+extern fn zuri_binpkg_arch(path: [*:0]const u8) ?*anyopaque;
+extern fn zuri_free_str(ptr: ?*anyopaque) void;
+
+fn dupCStr(allocator: std.mem.Allocator, ptr: ?*anyopaque) ![]const u8 {
+    const c_ptr = ptr orelse return error.NotFound;
+    const slice = @as([*:0]u8, @ptrCast(c_ptr));
+    defer zuri_free_str(c_ptr);
+    return allocator.dupe(u8, std.mem.sliceTo(slice, 0));
+}
+
+pub fn binpkgPkgver(allocator: std.mem.Allocator, path: []const u8) ![]const u8 {
+    var buf: [4096]u8 = undefined;
+    if (path.len > buf.len - 1) return error.NameTooLong;
+    @memcpy(buf[0..path.len], path);
+    buf[path.len] = 0;
+    return dupCStr(allocator, zuri_binpkg_pkgver(@ptrCast(&buf)));
+}
+
+pub fn binpkgArch(allocator: std.mem.Allocator, path: []const u8) ![]const u8 {
+    var buf: [4096]u8 = undefined;
+    if (path.len > buf.len - 1) return error.NameTooLong;
+    @memcpy(buf[0..path.len], path);
+    buf[path.len] = 0;
+    return dupCStr(allocator, zuri_binpkg_arch(@ptrCast(&buf)));
+}
+
 // --- Repo ---
 
 pub fn storeRepo(xhp: *Handle, repo_url: [:0]const u8) !void {
@@ -296,6 +325,7 @@ pub const PkgDownload = struct {
     filename: []const u8,
     sha256: []const u8,
     size: u64,
+    local_path: []const u8,
 };
 
 const CZuriPkgDownload = extern struct {
@@ -303,6 +333,7 @@ const CZuriPkgDownload = extern struct {
     filename: ?[*:0]u8,
     sha256: ?[*:0]u8,
     size: u64,
+    local_path: ?[*:0]u8,
 };
 
 extern fn zuri_transaction_pkgs(*Handle, count: *usize) ?[*]CZuriPkgDownload;
@@ -319,6 +350,7 @@ pub fn txPkgs(allocator: std.mem.Allocator, xhp: *Handle) ![]PkgDownload {
             allocator.free(p.pkgver);
             allocator.free(p.filename);
             allocator.free(p.sha256);
+            allocator.free(p.local_path);
         }
         allocator.free(result);
     }
@@ -327,11 +359,13 @@ pub fn txPkgs(allocator: std.mem.Allocator, xhp: *Handle) ![]PkgDownload {
         const pkgver = arr[i].pkgver orelse return error.Unexpected;
         const filename = arr[i].filename orelse return error.Unexpected;
         const sha256 = arr[i].sha256 orelse "";
+        const local_path = arr[i].local_path orelse "";
         result[i] = .{
             .pkgver = try allocator.dupe(u8, std.mem.sliceTo(pkgver, 0)),
             .filename = try allocator.dupe(u8, std.mem.sliceTo(filename, 0)),
             .sha256 = try allocator.dupe(u8, std.mem.sliceTo(sha256, 0)),
             .size = arr[i].size,
+            .local_path = try allocator.dupe(u8, std.mem.sliceTo(local_path, 0)),
         };
     }
     return result;
