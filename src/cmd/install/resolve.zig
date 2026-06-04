@@ -11,12 +11,15 @@ pub fn rslvInstall(
     io: std.Io,
     repo_url: [:0]const u8,
     pkg_names: []const []const u8,
+    force: bool,
 ) !install_plan.Plan {
     const parsed = try repo.RepoUrl.parse(repo_url);
     const cachedir = "/var/cache/xbps";
 
-    const xhp = try xbps.init(null, cachedir, xbps.Flag.disable_syslog);
+    const flags: c_int = @as(c_int, 0x00000080) | if (force) @as(c_int, 0x00000040) else 0;
+    const xhp = try xbps.init(null, cachedir, flags);
     errdefer xbps.end(xhp);
+    if (force) xbps.addFlags(xhp, xbps.Flag.force_unpack);
 
     try xbps.storeRepo(xhp, repo_url);
     try xbps.syncRpoolQ(xhp);
@@ -25,8 +28,11 @@ pub fn rslvInstall(
     defer not_found.deinit(allocator);
 
     for (pkg_names) |name| {
-        xbps.installPkgQ(xhp, name, false) catch |err| switch (err) {
-            error.AlreadyExists => continue,
+        xbps.installPkgQ(xhp, name, force) catch |err| switch (err) {
+            error.AlreadyExists => {
+                if (!force) continue;
+                return err;
+            },
             error.NotFound => {
                 try not_found.append(allocator, name);
                 continue;

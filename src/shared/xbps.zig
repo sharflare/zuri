@@ -28,6 +28,7 @@ pub const Flag = struct {
 
 extern fn zuri_xbps_init(rootdir: ?[*:0]const u8, cachedir: ?[*:0]const u8, flags: c_int) ?*Handle;
 extern fn zuri_xbps_end(*Handle) void;
+extern fn zuri_xbps_add_flags(*Handle, flags: c_int) void;
 
 extern fn xbps_pkgdb_lock(*Handle) c_int;
 extern fn xbps_pkgdb_unlock(*Handle) void;
@@ -59,6 +60,12 @@ pub fn init(rootdir: ?[]const u8, cachedir: ?[]const u8, flags_val: c_int) !*Han
 pub fn end(xhp: *Handle) void {
     zuri_xbps_end(xhp);
 }
+
+pub fn addFlags(xhp: *Handle, flags_val: c_int) void {
+    zuri_xbps_add_flags(xhp, flags_val);
+}
+
+
 
 // --- Error ---
 
@@ -141,6 +148,51 @@ pub fn searchPkgs(allocator: std.mem.Allocator, xhp: *Handle, pattern: []const u
     }
 
     return results;
+}
+
+// --- Package Info ---
+
+pub const PkgInfo = struct {
+    pkgver: []const u8,
+    short_desc: []const u8,
+    homepage: []const u8,
+    license: []const u8,
+    repository: []const u8,
+    installed_size: u64,
+    installed: bool,
+};
+
+const CZuriPkgInfo = extern struct {
+    pkgver: ?[*:0]u8,
+    short_desc: ?[*:0]u8,
+    homepage: ?[*:0]u8,
+    license: ?[*:0]u8,
+    repository: ?[*:0]u8,
+    installed_size: u64,
+    installed: c_int,
+};
+
+extern fn zuri_pkg_info(xhp: *Handle, pkgname: [*:0]const u8) ?*CZuriPkgInfo;
+extern fn zuri_free_pkg_info(info: ?*CZuriPkgInfo) void;
+
+pub fn pkgInfo(allocator: std.mem.Allocator, xhp: *Handle, pkgname: []const u8) !?PkgInfo {
+    if (pkgname.len > 1024) return error.NameTooLong;
+    var buf: [1025]u8 = undefined;
+    @memcpy(buf[0..pkgname.len], pkgname);
+    buf[pkgname.len] = 0;
+
+    const c_info = zuri_pkg_info(xhp, @ptrCast(&buf)) orelse return null;
+    defer zuri_free_pkg_info(c_info);
+
+    return PkgInfo{
+        .pkgver = try allocator.dupe(u8, std.mem.sliceTo(c_info.pkgver orelse "", 0)),
+        .short_desc = try allocator.dupe(u8, std.mem.sliceTo(c_info.short_desc orelse "", 0)),
+        .homepage = try allocator.dupe(u8, std.mem.sliceTo(c_info.homepage orelse "", 0)),
+        .license = try allocator.dupe(u8, std.mem.sliceTo(c_info.license orelse "", 0)),
+        .repository = try allocator.dupe(u8, std.mem.sliceTo(c_info.repository orelse "", 0)),
+        .installed_size = c_info.installed_size,
+        .installed = c_info.installed != 0,
+    };
 }
 
 // --- Lock ---

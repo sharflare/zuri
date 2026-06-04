@@ -20,6 +20,8 @@ const remove_exec = @import("cmd/remove/main.zig");
 const update_exec = @import("cmd/update/main.zig");
 const update_rslv = @import("cmd/update/resolve.zig");
 const search_exec = @import("cmd/search/main.zig");
+const info_exec = @import("cmd/info/main.zig");
+const clean_exec = @import("cmd/clean/main.zig");
 
 // --- Aliases ---
 
@@ -55,7 +57,7 @@ pub fn main(init: std.process.Init) !void {
             const repo_url: [:0]const u8 = try repo.getRepoUrl(init.minimal.environ, stderr, &repo_buf);
 
             try stderr.print("Resolving dependencies... ", .{});
-            var p = install_rslv.rslvInstall(gpa, init.io, repo_url, inst.positionals) catch |err| switch (err) {
+            var p = install_rslv.rslvInstall(gpa, init.io, repo_url, inst.positionals, inst.flags.@"force") catch |err| switch (err) {
                 error.NotFound => {
                     try stderr.print("failed\n", .{});
                     return;
@@ -106,13 +108,17 @@ pub fn main(init: std.process.Init) !void {
             }
         },
         .info => |inf| {
-            for (inf.positionals) |p| _ = p;
+            for (inf.positionals) |p| {
+                try info_exec.exec(gpa, init.io, p);
+            }
         },
         .build => |b| {
             _ = b.flags.force;
             for (b.positionals) |t| _ = t;
         },
-        .clean => |cl| _ = cl.flags.all,
+        .clean => |cl| {
+            try clean_exec.exec(gpa, init.io, cl.flags.all, cl.flags.@"orphans", result.flags.@"dry-run");
+        },
         .root => {
             var buf: [8192]u8 = undefined;
             try stderr.writeAll(cli.renderHelp(spec.root, &buf));

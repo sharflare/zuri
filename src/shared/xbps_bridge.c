@@ -32,6 +32,14 @@ void zuri_xbps_end(struct xbps_handle *xhp) {
   }
 }
 
+void zuri_xbps_add_flags(struct xbps_handle *xhp, int flags) {
+  if (xhp) {
+    xhp->flags |= flags;
+  }
+}
+
+
+
 int zuri_repo_store(struct xbps_handle *xhp, const char *repo_url) {
   return xbps_repo_store(xhp, repo_url) ? 0 : -1;
 }
@@ -78,8 +86,8 @@ ZuriPkgDownload *zuri_transaction_pkgs(struct xbps_handle *xhp, size_t *count) {
       continue;
 
     xbps_trans_type_t trans_type = xbps_transaction_pkg_type(pkg);
-    if (trans_type != XBPS_TRANS_INSTALL && trans_type != XBPS_TRANS_UPDATE &&
-        trans_type != XBPS_TRANS_REMOVE)
+    if (trans_type != XBPS_TRANS_INSTALL && trans_type != XBPS_TRANS_REINSTALL &&
+        trans_type != XBPS_TRANS_UPDATE && trans_type != XBPS_TRANS_REMOVE)
       continue;
 
     const char *pkgver = NULL;
@@ -261,6 +269,83 @@ void zuri_free_search_results(ZuriSearchResult *results, size_t count) {
 
 int zuri_pkgdb_has_pkg(struct xbps_handle *xhp, const char *pkgname) {
   return xbps_pkgdb_get_pkg(xhp, pkgname) != NULL;
+}
+
+// --- Package Info ---
+
+typedef struct {
+  char *pkgver;
+  char *short_desc;
+  char *homepage;
+  char *license;
+  char *repository;
+  uint64_t installed_size;
+  int installed;
+} ZuriPkgInfo;
+
+static void copy_str(char **dst, const char *src) {
+  if (*dst)
+    free(*dst);
+  *dst = src ? strdup(src) : NULL;
+}
+
+ZuriPkgInfo *zuri_pkg_info(struct xbps_handle *xhp, const char *pkgname) {
+  ZuriPkgInfo *info = calloc(1, sizeof(*info));
+  if (!info)
+    return NULL;
+
+  // Look up in pkgdb first, fall back to rpool
+  xbps_dictionary_t pkgd = xbps_pkgdb_get_pkg(xhp, pkgname);
+  if (pkgd) {
+    info->installed = 1;
+  } else {
+    pkgd = xbps_rpool_get_pkg(xhp, pkgname);
+    if (!pkgd) {
+      free(info);
+      return NULL;
+    }
+  }
+
+  const char *val = NULL;
+  xbps_dictionary_get_cstring_nocopy(pkgd, "pkgver", &val);
+  if (val) info->pkgver = strdup(val);
+
+  xbps_dictionary_get_cstring_nocopy(pkgd, "short_desc", &val);
+  if (val) info->short_desc = strdup(val);
+
+  xbps_dictionary_get_cstring_nocopy(pkgd, "homepage", &val);
+  if (val) info->homepage = strdup(val);
+
+  xbps_dictionary_get_cstring_nocopy(pkgd, "license", &val);
+  if (val) info->license = strdup(val);
+
+  // Get repository from the pkgdb entry or fall back
+  if (info->installed) {
+    xbps_dictionary_get_cstring_nocopy(pkgd, "repository", &val);
+    if (val) info->repository = strdup(val);
+  } else {
+    // For uninstalled packages, use the pkgver to find the repo
+    // This is stored in the pkg dictionary from rpool
+    xbps_dictionary_get_cstring_nocopy(pkgd, "repository", &val);
+    if (val) info->repository = strdup(val);
+  }
+
+  uint64_t usize = 0;
+  xbps_dictionary_get_uint64(pkgd, "installed_size", &usize);
+  info->installed_size = usize;
+
+  return info;
+}
+
+void zuri_free_pkg_info(ZuriPkgInfo *info) {
+  if (!info)
+    return;
+  free(info->pkgver);
+  free(info->short_desc);
+  free(info->homepage);
+  free(info->license);
+  free(info->repository);
+  free(info);
 }
 
 // --- StdErr ---

@@ -5,6 +5,7 @@ pub const install = cli.Command{
     .description = "Install one or more packages",
     .flags = &.{
         cli.Flag{ .long = "yes", .short = 'y', .kind = .bool, .description = "Skip confirmation prompt" },
+        cli.Flag{ .long = "force", .short = 'f', .kind = .bool, .description = "Force re-install even if already installed" },
     },
     .positionals = &.{
         cli.Positional{ .name = "pkg", .description = "Package(s) to install", .variadic = true },
@@ -64,6 +65,7 @@ pub const clean = cli.Command{
     .description = "Remove cached packages",
     .flags = &.{
         cli.Flag{ .long = "all", .short = 'a', .kind = .bool, .description = "Remove all cached files including partials" },
+        cli.Flag{ .long = "orphans", .short = 'o', .kind = .bool, .description = "Also remove orphaned dependencies" },
     },
 };
 

@@ -22,6 +22,7 @@ pub const Plan = struct {
     cachedir: []const u8 = "/var/cache/xbps",
     dry_run: bool = false,
     yes: bool = false,
+    force: bool = false,
     xhp: *xbps.Handle,
     mode: Mode = .install,
 };
