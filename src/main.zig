@@ -19,6 +19,7 @@ const install_rslv = @import("cmd/install/resolve.zig");
 const remove_exec = @import("cmd/remove/main.zig");
 const update_exec = @import("cmd/update/main.zig");
 const update_rslv = @import("cmd/update/resolve.zig");
+const search_exec = @import("cmd/search/main.zig");
 
 // --- Aliases ---
 
@@ -99,7 +100,10 @@ pub fn main(init: std.process.Init) !void {
             try update_exec.exec(gpa, p, init.environ_map);
         },
         .search => |se| {
-            for (se.positionals) |q| _ = q;
+            const repo_url: [:0]const u8 = try repo.getRepoUrl(init.minimal.environ, stderr, &repo_buf);
+            for (se.positionals) |q| {
+                try search_exec.exec(gpa, init.io, repo_url, q);
+            }
         },
         .info => |inf| {
             for (inf.positionals) |p| _ = p;

@@ -21,6 +21,24 @@ pub const DownloadConfig = struct {
     initial_retry_delay_ms: u64 = 1000,
 };
 
+// --- Shared Client ---
+
+pub const SharedClient = struct {
+    client: std.http.Client,
+
+    pub fn init(allocator: std.mem.Allocator, io: std.Io, environ_map: *const std.process.Environ.Map) !SharedClient {
+        var client = std.http.Client{ .allocator = allocator, .io = io };
+        client.now = std.Io.Timestamp.now(io, .real);
+        try client.ca_bundle.rescan(allocator, io, client.now.?);
+        proxyFromEnv(&client, environ_map);
+        return .{ .client = client };
+    }
+
+    pub fn deinit(self: *SharedClient) void {
+        self.client.deinit();
+    }
+};
+
 // --- Fetch All ---
 
 pub fn fetchAll(
@@ -37,6 +55,9 @@ pub fn fetchAll(
 
     const io = threaded.io();
 
+    var shared = try SharedClient.init(allocator, io, environ_map);
+    defer shared.deinit();
+
     var group: std.Io.Group = .init;
     defer group.cancel(io);
 
@@ -44,7 +65,7 @@ pub fn fetchAll(
     var cancelled = std.atomic.Value(bool).init(false);
 
     for (downloads, 0..) |dl, i| {
-        group.async(io, fetchPackage, .{ dl, @as(usize, i), config, mp, &semaphore, &cancelled, io, environ_map });
+        group.async(io, fetchPackage, .{ dl, @as(usize, i), config, mp, &semaphore, &cancelled, io, &shared.client });
     }
 
     try group.await(io);
@@ -62,7 +83,7 @@ fn fetchPackage(
     sem: *std.Io.Semaphore,
     cancelled: *std.atomic.Value(bool),
     io: std.Io,
-    environ_map: *const std.process.Environ.Map,
+    client: *std.http.Client,
 ) void {
     if (cancelled.load(.monotonic) or shutdown.isCancelled()) {
         mp.setFailed(idx);
@@ -101,7 +122,7 @@ fn fetchPackage(
             retry_delay *|= 2;
         }
 
-        if (blockingDl(dl, idx, mp, io, environ_map)) |_| {
+        if (blockingDl(dl, idx, mp, io, client)) |_| {
             mp.setDone(idx);
             return;
         } else |err| {
@@ -188,14 +209,7 @@ fn createProxy(url: []const u8, allocator: std.mem.Allocator) ?*std.http.Client.
 
 // --- Driver ---
 
-fn blockingDl(dl: PackageDownload, idx: usize, mp: *progress.MultiProgress, io: std.Io, environ_map: *const std.process.Environ.Map) !u64 {
-    var client = std.http.Client{ .allocator = std.heap.page_allocator, .io = io };
-    client.now = std.Io.Timestamp.now(io, .real);
-    try client.ca_bundle.rescan(client.allocator, io, client.now.?);
-    defer client.deinit();
-
-    proxyFromEnv(&client, environ_map);
-
+fn blockingDl(dl: PackageDownload, idx: usize, mp: *progress.MultiProgress, io: std.Io, client: *std.http.Client) !u64 {
     var url_buf: [4096]u8 = undefined;
     const url = if (dl.port == 443)
         try std.fmt.bufPrint(&url_buf, "https://{s}{s}", .{ dl.host, dl.path })

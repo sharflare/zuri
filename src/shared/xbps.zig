@@ -86,6 +86,63 @@ fn check(rc: c_int) !void {
     };
 }
 
+// --- Search ---
+
+pub const SearchResult = struct {
+    pkgver: []const u8,
+    short_desc: []const u8,
+    pkgname: []const u8,
+    installed: bool,
+};
+
+const CZuriSearchResult = extern struct {
+    pkgver: ?[*:0]u8,
+    short_desc: ?[*:0]u8,
+    pkgname: ?[*:0]u8,
+};
+
+extern fn zuri_rpool_search(xhp: *Handle, pattern: [*:0]const u8, count: *usize) ?[*]CZuriSearchResult;
+extern fn zuri_free_search_results(results: ?[*]CZuriSearchResult, count: usize) void;
+extern fn zuri_pkgdb_has_pkg(xhp: *Handle, pkgname: [*:0]const u8) c_int;
+
+pub fn searchPkgs(allocator: std.mem.Allocator, xhp: *Handle, pattern: []const u8) ![]SearchResult {
+    if (pattern.len > 1024) return error.NameTooLong;
+    var pattern_buf: [1025]u8 = undefined;
+    @memcpy(pattern_buf[0..pattern.len], pattern);
+    pattern_buf[pattern.len] = 0;
+
+    var count: usize = 0;
+    const arr = zuri_rpool_search(xhp, @ptrCast(&pattern_buf), &count) orelse return &.{};
+    defer zuri_free_search_results(arr, count);
+
+    var results = try allocator.alloc(SearchResult, count);
+    errdefer {
+        for (results) |r| {
+            allocator.free(r.pkgver);
+            allocator.free(r.short_desc);
+            allocator.free(r.pkgname);
+        }
+        allocator.free(results);
+    }
+
+    for (0..count) |i| {
+        const pkgver = arr[i].pkgver orelse return error.Unexpected;
+        const short_desc = arr[i].short_desc orelse "";
+        const pkgname = arr[i].pkgname orelse return error.Unexpected;
+
+        const installed = zuri_pkgdb_has_pkg(xhp, @as([*:0]const u8, arr[i].pkgname orelse return error.Unexpected)) != 0;
+
+        results[i] = .{
+            .pkgver = try allocator.dupe(u8, std.mem.sliceTo(pkgver, 0)),
+            .short_desc = try allocator.dupe(u8, std.mem.sliceTo(short_desc, 0)),
+            .pkgname = try allocator.dupe(u8, std.mem.sliceTo(pkgname, 0)),
+            .installed = installed,
+        };
+    }
+
+    return results;
+}
+
 // --- Lock ---
 
 pub fn lockPkgdb(xhp: *Handle) !void {
