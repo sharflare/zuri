@@ -8,16 +8,16 @@ const spec = @import("spec.zig");
 // --- Shared Utils ---
 
 const repo = @import("shared/repo.zig");
-const install_plan = @import("shared/install_plan.zig");
+const plan = @import("shared/install_plan.zig");
 const shutdown = @import("shared/shutdown.zig");
 const xbps = @import("shared/xbps.zig");
 
 // --- Commands ---
 
 const install_exec = @import("cmd/install/main.zig");
-const install_resolve = @import("cmd/install/resolve.zig");
+const install_rslv = @import("cmd/install/resolve.zig");
 const update_exec = @import("cmd/update/main.zig");
-const update_resolve = @import("cmd/update/resolve.zig");
+const update_rslv = @import("cmd/update/resolve.zig");
 
 // --- Aliases ---
 
@@ -53,7 +53,7 @@ pub fn main(init: std.process.Init) !void {
             const repo_url: [:0]const u8 = try repo.getRepoUrl(init.minimal.environ, stderr, &repo_buf);
 
             try stderr.print("Resolving dependencies... ", .{});
-            var plan = install_resolve.resolveForInstall(gpa, init.io, repo_url, inst.positionals) catch |err| switch (err) {
+            var p = install_rslv.rslvInstall(gpa, init.io, repo_url, inst.positionals) catch |err| switch (err) {
                 error.NotFound => {
                     try stderr.print("failed\n", .{});
                     return;
@@ -61,11 +61,11 @@ pub fn main(init: std.process.Init) !void {
                 else => |e| return e,
             };
             try stderr.print("done\n", .{});
-            defer install_plan.deinitPlan(&plan, gpa);
-            plan.dry_run = result.flags.@"dry-run";
-            plan.yes = inst.flags.yes;
-            if (result.flags.root) |root| plan.rootdir = root;
-            try install_exec.exec(gpa, plan, init.environ_map);
+            defer plan.deinit(&p, gpa);
+            p.dry_run = result.flags.@"dry-run";
+            p.yes = inst.flags.yes;
+            if (result.flags.root) |root| p.rootdir = root;
+            try install_exec.exec(gpa, p, init.environ_map);
         },
         .remove => |rm| {
             _ = rm.flags.yes;
@@ -80,7 +80,7 @@ pub fn main(init: std.process.Init) !void {
             const repo_url: [:0]const u8 = try repo.getRepoUrl(init.minimal.environ, stderr, &repo_buf);
 
             try stderr.print("Resolving dependencies... ", .{});
-            var plan = update_resolve.resolveForUpdate(gpa, init.io, repo_url) catch |err| switch (err) {
+            var p = update_rslv.rslvUpdate(gpa, init.io, repo_url) catch |err| switch (err) {
                 error.NotFound => {
                     try stderr.print("failed\n", .{});
                     return;
@@ -88,11 +88,11 @@ pub fn main(init: std.process.Init) !void {
                 else => |e| return e,
             };
             try stderr.print("done\n", .{});
-            defer install_plan.deinitPlan(&plan, gpa);
-            plan.dry_run = result.flags.@"dry-run";
-            plan.yes = up.flags.yes;
-            if (result.flags.root) |root| plan.rootdir = root;
-            try update_exec.exec(gpa, plan, init.environ_map);
+            defer plan.deinit(&p, gpa);
+            p.dry_run = result.flags.@"dry-run";
+            p.yes = up.flags.yes;
+            if (result.flags.root) |root| p.rootdir = root;
+            try update_exec.exec(gpa, p, init.environ_map);
         },
         .search => |se| {
             for (se.positionals) |q| _ = q;

@@ -1,5 +1,7 @@
 const std = @import("std");
 
+// --- Types ---
+
 pub const StateTag = enum(u8) {
     pending,
     downloading,
@@ -14,19 +16,23 @@ const winsize = extern struct {
     ypixel: u16,
 };
 
-fn terminalWidth() usize {
-    var ws: winsize = undefined;
-    if (std.os.linux.ioctl(2, std.os.linux.T.IOCGWINSZ, @intFromPtr(&ws)) != 0)
-        return 0;
-    return @max(ws.col, 40);
-}
-
 const Item = struct {
     label: []const u8,
     state: std.atomic.Value(u8),
     current: std.atomic.Value(u64),
     total: std.atomic.Value(u64),
 };
+
+const BAR_WIDTH: usize = 13;
+
+// --- Terminal ---
+
+fn termWidth() usize {
+    var ws: winsize = undefined;
+    if (std.os.linux.ioctl(2, std.os.linux.T.IOCGWINSZ, @intFromPtr(&ws)) != 0)
+        return 0;
+    return @max(ws.col, 40);
+}
 
 fn sleepMs(io: std.Io, ms: u64) void {
     io.sleep(std.Io.Duration.fromMilliseconds(@as(i64, @intCast(ms))), .awake) catch {};
@@ -39,7 +45,7 @@ fn stderrWrite(io: std.Io, bytes: []const u8) void {
     w.flush() catch {};
 }
 
-const BAR_WIDTH: usize = 13;
+// --- Size Formatting ---
 
 fn sizeUnit(bytes: u64) struct { divisor: f64, suffix: []const u8 } {
     if (bytes >= 1_000_000_000) return .{ .divisor = 1_000_000_000, .suffix = "GB" };
@@ -56,7 +62,7 @@ pub fn humanSize(buf: []u8, bytes: u64) []const u8 {
     return std.fmt.bufPrint(buf, "{d:.1} {s}", .{ v, u.suffix }) catch return buf[0..0];
 }
 
-fn formatBytesProgress(buf: []u8, current: u64, total: u64) []const u8 {
+fn fmtBytesProg(buf: []u8, current: u64, total: u64) []const u8 {
     const u = sizeUnit(total);
     const cur_v = @as(f64, @floatFromInt(current)) / u.divisor;
     const tot_v = @as(f64, @floatFromInt(total)) / u.divisor;
@@ -64,6 +70,8 @@ fn formatBytesProgress(buf: []u8, current: u64, total: u64) []const u8 {
     if (u.divisor == 1_000) return std.fmt.bufPrint(buf, "{d:.0}/{d:.0} {s}", .{ cur_v, tot_v, u.suffix }) catch return buf[0..0];
     return std.fmt.bufPrint(buf, "{d:.1}/{d:.1} {s}", .{ cur_v, tot_v, u.suffix }) catch return buf[0..0];
 }
+
+// --- Bar Rendering ---
 
 fn formatBar(bar_buf: []u8, pct: u8, fill_char: u8, empty_char: u8) void {
     const filled = @min(@as(usize, @intCast(pct)) * BAR_WIDTH / 100, BAR_WIDTH);
@@ -80,7 +88,7 @@ fn buildBarBlock(bar_block_buf: []u8, tag: StateTag, current: u64, total: u64) [
             var bar: [BAR_WIDTH]u8 = undefined;
             formatBar(&bar, pct, '/', '-');
             var size_buf: [32]u8 = undefined;
-            const size_str = formatBytesProgress(&size_buf, current, total);
+            const size_str = fmtBytesProg(&size_buf, current, total);
             const result = std.fmt.bufPrint(bar_block_buf, "[{s}] {d:>3}% {s}", .{ bar[0..], pct, size_str }) catch return "";
             return result;
         },
@@ -88,7 +96,7 @@ fn buildBarBlock(bar_block_buf: []u8, tag: StateTag, current: u64, total: u64) [
             var bar: [BAR_WIDTH]u8 = undefined;
             formatBar(&bar, 100, '/', '-');
             var size_buf: [32]u8 = undefined;
-            const size_str = formatBytesProgress(&size_buf, total, total);
+            const size_str = fmtBytesProg(&size_buf, total, total);
             const result = std.fmt.bufPrint(bar_block_buf, "[{s}] 100% {s}", .{ bar[0..], size_str }) catch return "";
             return result;
         },
@@ -96,7 +104,7 @@ fn buildBarBlock(bar_block_buf: []u8, tag: StateTag, current: u64, total: u64) [
     };
 }
 
-fn formatFetchLine(buf: []u8, item: *const Item, label_width: usize, term_width: usize) []const u8 {
+fn fmtFetchLine(buf: []u8, item: *const Item, label_width: usize, term_width: usize) []const u8 {
     const tag: StateTag = @enumFromInt(item.state.load(.monotonic));
     const current = item.current.load(.monotonic);
     const total = item.total.load(.monotonic);
@@ -140,6 +148,8 @@ fn formatFetchLine(buf: []u8, item: *const Item, label_width: usize, term_width:
     return std.fmt.bufPrint(buf, "{s} {s}", .{ padded_prefix, bar_block }) catch return buf[0..0];
 }
 
+// --- Progress ---
+
 pub const MultiProgress = struct {
     allocator: std.mem.Allocator,
     io: std.Io,
@@ -176,7 +186,7 @@ pub const MultiProgress = struct {
             .running = std.atomic.Value(u8).init(0),
             .drawn = std.atomic.Value(u8).init(0),
             .thread = null,
-            .term_width = terminalWidth(),
+            .term_width = termWidth(),
         };
     }
 
@@ -193,7 +203,7 @@ pub const MultiProgress = struct {
         if (self.is_tty and self.items.len > 0) {
             for (0..self.items.len) |i| {
                 var line_buf: [512]u8 = undefined;
-                const line = formatFetchLine(&line_buf, &self.items[i], self.label_width, self.term_width);
+                const line = fmtFetchLine(&line_buf, &self.items[i], self.label_width, self.term_width);
                 stderrWrite(self.io, "\r\x1b[K");
                 stderrWrite(self.io, line);
                 stderrWrite(self.io, "\n");
@@ -216,7 +226,7 @@ pub const MultiProgress = struct {
                 const tag: StateTag = @enumFromInt(self.items[i].state.load(.monotonic));
                 if (tag != .done and tag != .failed) {
                     var line_buf: [512]u8 = undefined;
-                    const line = formatFetchLine(&line_buf, &self.items[i], self.label_width, self.term_width);
+                    const line = fmtFetchLine(&line_buf, &self.items[i], self.label_width, self.term_width);
                     stderrWrite(self.io, line);
                     stderrWrite(self.io, "\n");
                 }
@@ -246,7 +256,7 @@ pub const MultiProgress = struct {
         self.items[idx].state.store(@intFromEnum(StateTag.done), .monotonic);
         if (!self.is_tty) {
             var line_buf: [512]u8 = undefined;
-            const line = formatFetchLine(&line_buf, &self.items[idx], self.label_width, self.term_width);
+            const line = fmtFetchLine(&line_buf, &self.items[idx], self.label_width, self.term_width);
             stderrWrite(self.io, line);
             stderrWrite(self.io, "\n");
         }
@@ -256,7 +266,7 @@ pub const MultiProgress = struct {
         self.items[idx].state.store(@intFromEnum(StateTag.failed), .monotonic);
         if (!self.is_tty) {
             var line_buf: [512]u8 = undefined;
-            const line = formatFetchLine(&line_buf, &self.items[idx], self.label_width, self.term_width);
+            const line = fmtFetchLine(&line_buf, &self.items[idx], self.label_width, self.term_width);
             stderrWrite(self.io, line);
             stderrWrite(self.io, "\n");
         }
@@ -276,7 +286,7 @@ pub const MultiProgress = struct {
         stderrWrite(self.io, up);
         for (0..self.items.len) |i| {
             var line_buf: [512]u8 = undefined;
-            const line = formatFetchLine(&line_buf, &self.items[i], self.label_width, self.term_width);
+            const line = fmtFetchLine(&line_buf, &self.items[i], self.label_width, self.term_width);
             stderrWrite(self.io, "\r\x1b[K");
             stderrWrite(self.io, line);
             stderrWrite(self.io, "\n");

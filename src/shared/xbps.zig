@@ -1,5 +1,7 @@
 const std = @import("std");
 
+// --- Types ---
+
 pub const Handle = opaque {};
 
 pub const Flag = struct {
@@ -22,6 +24,8 @@ pub const Flag = struct {
     pub const use_stage = 0x00020000;
 };
 
+// --- C Externs ---
+
 extern fn zuri_xbps_init(rootdir: ?[*:0]const u8, cachedir: ?[*:0]const u8, flags: c_int) ?*Handle;
 extern fn zuri_xbps_end(*Handle) void;
 
@@ -33,6 +37,17 @@ extern fn xbps_transaction_commit(*Handle) c_int;
 extern fn xbps_configure_packages(*Handle, ignpkgs: ?*anyopaque) c_int;
 extern fn xbps_pkgdb_update(*Handle, flush: bool, update_: bool) c_int;
 
+extern fn xbps_transaction_update_packages(*Handle) c_int;
+
+extern fn zuri_stderr_suppress() void;
+extern fn zuri_stderr_restore() void;
+
+extern fn zuri_repo_store(*Handle, repo_url: [*:0]const u8) c_int;
+extern fn zuri_rpool_sync(*Handle) c_int;
+extern fn zuri_free_str_array(ptr: ?*anyopaque, count: usize) void;
+
+// --- Init / Deinit ---
+
 pub fn init(rootdir: ?[]const u8, cachedir: ?[]const u8, flags_val: c_int) !*Handle {
     const root: ?[*:0]const u8 = if (rootdir) |r| @ptrCast(r.ptr) else null;
     const cache: ?[*:0]const u8 = if (cachedir) |c| @ptrCast(c.ptr) else null;
@@ -42,6 +57,8 @@ pub fn init(rootdir: ?[]const u8, cachedir: ?[]const u8, flags_val: c_int) !*Han
 pub fn end(xhp: *Handle) void {
     zuri_xbps_end(xhp);
 }
+
+// --- Error ---
 
 fn check(rc: c_int) !void {
     if (rc == 0) return;
@@ -68,19 +85,17 @@ fn check(rc: c_int) !void {
     }
 }
 
-pub fn pkgdbLock(xhp: *Handle) !void {
+// --- Pkgdb ---
+
+pub fn lockPkgdb(xhp: *Handle) !void {
     try check(xbps_pkgdb_lock(xhp));
 }
 
-pub fn pkgdbUnlock(xhp: *Handle) void {
+pub fn unlockPkgdb(xhp: *Handle) void {
     xbps_pkgdb_unlock(xhp);
 }
 
-extern fn xbps_transaction_update_packages(*Handle) c_int;
-
-pub fn updateAllPkgs(xhp: *Handle) !void {
-    try check(xbps_transaction_update_packages(xhp));
-}
+// --- Transaction ---
 
 pub fn installPkg(xhp: *Handle, pkg: []const u8, force: bool) !void {
     if (pkg.len > 1024) return error.NameTooLong;
@@ -90,69 +105,69 @@ pub fn installPkg(xhp: *Handle, pkg: []const u8, force: bool) !void {
     try check(xbps_transaction_install_pkg(xhp, @ptrCast(&buf), force));
 }
 
-pub fn installPkgQuiet(xhp: *Handle, pkg: []const u8, force: bool) !void {
+pub fn installPkgQ(xhp: *Handle, pkg: []const u8, force: bool) !void {
     if (pkg.len > 1024) return error.NameTooLong;
     var buf: [1025]u8 = undefined;
     @memcpy(buf[0..pkg.len], pkg);
     buf[pkg.len] = 0;
-    zuri_stderr_suppress();
+    stderrOff();
     const rc = xbps_transaction_install_pkg(xhp, @ptrCast(&buf), force);
-    zuri_stderr_restore();
+    stderrOn();
     try check(rc);
 }
 
-pub fn transactionPrepare(xhp: *Handle) !void {
+pub fn prepTx(xhp: *Handle) !void {
     try check(xbps_transaction_prepare(xhp));
 }
 
-pub fn transactionPrepareQuiet(xhp: *Handle) !void {
-    zuri_stderr_suppress();
-    defer zuri_stderr_restore();
+pub fn prepTxQ(xhp: *Handle) !void {
+    stderrOff();
+    defer stderrOn();
     try check(xbps_transaction_prepare(xhp));
 }
 
-pub fn transactionCommit(xhp: *Handle) !void {
+pub fn txCommit(xhp: *Handle) !void {
     try check(xbps_transaction_commit(xhp));
 }
 
-pub fn configurePackages(xhp: *Handle) !void {
+pub fn updAllPkgs(xhp: *Handle) !void {
+    try check(xbps_transaction_update_packages(xhp));
+}
+
+pub fn cfgPkgs(xhp: *Handle) !void {
     try check(xbps_configure_packages(xhp, null));
 }
 
-pub fn pkgdbUpdate(xhp: *Handle, flush: bool, update_: bool) !void {
+pub fn pkgdbUpd(xhp: *Handle, flush: bool, update_: bool) !void {
     try check(xbps_pkgdb_update(xhp, flush, update_));
 }
 
-extern fn zuri_stderr_suppress() void;
-extern fn zuri_stderr_restore() void;
-
-pub fn stderrSuppress() void {
+pub fn stderrOff() void {
     zuri_stderr_suppress();
 }
-pub fn stderrRestore() void {
+
+pub fn stderrOn() void {
     zuri_stderr_restore();
 }
 
-extern fn zuri_repo_store(*Handle, repo_url: [*:0]const u8) c_int;
-extern fn zuri_rpool_sync(*Handle) c_int;
-extern fn zuri_free_str_array(ptr: ?*anyopaque, count: usize) void;
+// --- Repo ---
 
-pub fn repoStore(xhp: *Handle, repo_url: [:0]const u8) !void {
+pub fn storeRepo(xhp: *Handle, repo_url: [:0]const u8) !void {
     if (zuri_repo_store(xhp, repo_url) != 0)
         return error.RepoStoreFailed;
 }
 
-pub fn rpoolSync(xhp: *Handle) !void {
+pub fn syncRpool(xhp: *Handle) !void {
     try check(zuri_rpool_sync(xhp));
 }
 
-pub fn rpoolSyncQuiet(xhp: *Handle) !void {
-    zuri_stderr_suppress();
-    defer zuri_stderr_restore();
+pub fn syncRpoolQ(xhp: *Handle) !void {
+    stderrOff();
+    defer stderrOn();
     try check(zuri_rpool_sync(xhp));
 }
 
-// --- transaction pkg extraction ---
+// --- Tx Pkg Metadata ---
 
 pub const PkgDownload = struct {
     pkgver: []const u8,
@@ -171,7 +186,7 @@ const CZuriPkgDownload = extern struct {
 extern fn zuri_transaction_pkgs(*Handle, count: *usize) ?[*]CZuriPkgDownload;
 extern fn zuri_free_pkg_downloads(arr: ?[*]CZuriPkgDownload, count: usize) void;
 
-pub fn transactionPkgs(allocator: std.mem.Allocator, xhp: *Handle) ![]PkgDownload {
+pub fn txPkgs(allocator: std.mem.Allocator, xhp: *Handle) ![]PkgDownload {
     var count: usize = 0;
     const arr = zuri_transaction_pkgs(xhp, &count) orelse return &.{};
     defer zuri_free_pkg_downloads(arr, count);

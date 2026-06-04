@@ -5,6 +5,8 @@ const xbps = @import("../../shared/xbps.zig");
 const progress = @import("../../shared/progress.zig");
 const install_plan = @import("../../shared/install_plan.zig");
 
+// --- Helpers ---
+
 fn stderrPrint(io: std.Io, comptime fmt: []const u8, args: anytype) void {
     var buf: [4096]u8 = undefined;
     var w = std.Io.File.stderr().writer(io, &buf);
@@ -26,7 +28,9 @@ fn confirmProceed(io: std.Io, yes: bool) bool {
     return !(n > 0 and (input[0] == 'n' or input[0] == 'N'));
 }
 
-fn printSummary(io: std.Io, packages: []const dl.PackageDownload, mode: install_plan.PlanMode) void {
+// --- Summary ---
+
+fn printSummary(io: std.Io, packages: []const dl.PackageDownload, mode: install_plan.Mode) void {
     var name_width: usize = 0;
     var total_size: u64 = 0;
     for (packages) |pkg| {
@@ -89,7 +93,9 @@ fn printSummary(io: std.Io, packages: []const dl.PackageDownload, mode: install_
     }
 }
 
-pub fn exec(allocator: std.mem.Allocator, plan: install_plan.InstallPlan, environ_map: *const std.process.Environ.Map) !void {
+// --- Exec ---
+
+pub fn exec(allocator: std.mem.Allocator, plan: install_plan.Plan, environ_map: *const std.process.Environ.Map) !void {
     const io = std.Io.Threaded.global_single_threaded.io();
     const count = plan.packages.len;
 
@@ -185,7 +191,7 @@ pub fn exec(allocator: std.mem.Allocator, plan: install_plan.InstallPlan, enviro
     }
 
     for (plan.packages) |pkg| {
-        if (!dl.destPathIsCached(pkg, io)) {
+        if (!dl.destCached(pkg, io)) {
             stderrPrint(io, "{s}: cache corrupted — re-run to re-download\n", .{pkg.name});
             return error.CacheCorrupted;
         }
@@ -194,10 +200,12 @@ pub fn exec(allocator: std.mem.Allocator, plan: install_plan.InstallPlan, enviro
     try commitViaXbps(io, plan);
 }
 
-fn commitViaXbps(io: std.Io, plan: install_plan.InstallPlan) !void {
+// --- Commit ---
+
+fn commitViaXbps(io: std.Io, plan: install_plan.Plan) !void {
     const xhp = plan.xhp;
 
-    try xbps.transactionCommit(xhp);
+    try xbps.txCommit(xhp);
 
     const verb = switch (plan.mode) {
         .install => "Installing",
@@ -220,6 +228,6 @@ fn commitViaXbps(io: std.Io, plan: install_plan.InstallPlan) !void {
         done_verb,
     });
 
-    try xbps.configurePackages(xhp);
-    try xbps.pkgdbUpdate(xhp, true, false);
+    try xbps.cfgPkgs(xhp);
+    try xbps.pkgdbUpd(xhp, true, false);
 }

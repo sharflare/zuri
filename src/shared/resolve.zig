@@ -2,7 +2,9 @@ const std = @import("std");
 const dl = @import("download.zig");
 const repo = @import("repo.zig");
 
-pub fn buildDownloads(allocator: std.mem.Allocator, parsed: repo.RepoUrl, cachedir: []const u8, pkg_metas: []const @import("xbps.zig").PkgDownload) ![]dl.PackageDownload {
+// --- Build ---
+
+pub fn buildDls(allocator: std.mem.Allocator, parsed: repo.RepoUrl, cachedir: []const u8, pkg_metas: []const @import("xbps.zig").PkgDownload) ![]dl.PackageDownload {
     var downloads = try allocator.alloc(dl.PackageDownload, pkg_metas.len);
     errdefer allocator.free(downloads);
 

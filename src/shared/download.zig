@@ -2,6 +2,8 @@ const std = @import("std");
 const progress = @import("progress.zig");
 const shutdown = @import("shutdown.zig");
 
+// --- Types ---
+
 pub const PackageDownload = struct {
     name: []const u8,
     version: []const u8,
@@ -18,6 +20,8 @@ pub const DownloadConfig = struct {
     retry_count: u3 = 3,
     initial_retry_delay_ms: u64 = 1000,
 };
+
+// --- Fetch All ---
 
 pub fn fetchAll(
     allocator: std.mem.Allocator,
@@ -48,6 +52,8 @@ pub fn fetchAll(
     if (mp.anyFailed()) return error.DownloadFailed;
 }
 
+// --- Single Package Fetch ---
+
 fn fetchPackage(
     dl: PackageDownload,
     idx: usize,
@@ -73,7 +79,7 @@ fn fetchPackage(
 
     mp.setTotal(idx, dl.size);
 
-    if (destPathIsCached(dl, io)) {
+    if (destCached(dl, io)) {
         mp.setCurrent(idx, dl.size);
         mp.setDone(idx);
         return;
@@ -95,7 +101,7 @@ fn fetchPackage(
             retry_delay *|= 2;
         }
 
-        if (doBlockingDownload(dl, idx, mp, io, environ_map)) |_| {
+        if (blockingDl(dl, idx, mp, io, environ_map)) |_| {
             mp.setDone(idx);
             return;
         } else |err| {
@@ -121,16 +127,20 @@ fn fetchPackage(
     mp.setFailed(idx);
 }
 
-pub fn destPathIsCached(dl: PackageDownload, io: std.Io) bool {
+// --- Cache Check ---
+
+pub fn destCached(dl: PackageDownload, io: std.Io) bool {
     if (dl.sha256.len == 0) return false;
-    const hex = computeSHA256(dl.dest_path, io) catch return false;
+    const hex = sha256Of(dl.dest_path, io) catch return false;
     defer std.heap.page_allocator.free(hex);
     const match = std.ascii.eqlIgnoreCase(hex, dl.sha256);
     if (!match) std.Io.Dir.deleteFileAbsolute(io, dl.dest_path) catch {};
     return match;
 }
 
-fn setupProxyFromEnv(client: *std.http.Client, environ_map: *const std.process.Environ.Map) void {
+// --- Proxy ---
+
+fn proxyFromEnv(client: *std.http.Client, environ_map: *const std.process.Environ.Map) void {
     const allocator = client.allocator;
     inline for (.{ "https_proxy", "HTTPS_PROXY", "all_proxy", "ALL_PROXY" }) |name| {
         if (environ_map.get(name)) |raw| {
@@ -176,13 +186,15 @@ fn createProxy(url: []const u8, allocator: std.mem.Allocator) ?*std.http.Client.
     return proxy;
 }
 
-fn doBlockingDownload(dl: PackageDownload, idx: usize, mp: *progress.MultiProgress, io: std.Io, environ_map: *const std.process.Environ.Map) !u64 {
+// --- Driver ---
+
+fn blockingDl(dl: PackageDownload, idx: usize, mp: *progress.MultiProgress, io: std.Io, environ_map: *const std.process.Environ.Map) !u64 {
     var client = std.http.Client{ .allocator = std.heap.page_allocator, .io = io };
     client.now = std.Io.Timestamp.now(io, .real);
     try client.ca_bundle.rescan(client.allocator, io, client.now.?);
     defer client.deinit();
 
-    setupProxyFromEnv(&client, environ_map);
+    proxyFromEnv(&client, environ_map);
 
     var url_buf: [4096]u8 = undefined;
     const url = if (dl.port == 443)
@@ -257,7 +269,9 @@ fn doBlockingDownload(dl: PackageDownload, idx: usize, mp: *progress.MultiProgre
     return total;
 }
 
-fn computeSHA256(path: []const u8, io: std.Io) ![]u8 {
+// --- Hash ---
+
+fn sha256Of(path: []const u8, io: std.Io) ![]u8 {
     var file = try std.Io.Dir.openFileAbsolute(io, path, .{});
     defer file.close(io);
 

@@ -4,11 +4,13 @@ const xbps = @import("../../shared/xbps.zig");
 const install_plan = @import("../../shared/install_plan.zig");
 const shared_resolve = @import("../../shared/resolve.zig");
 
-pub fn resolveForUpdate(
+// --- Resolve Update ---
+
+pub fn rslvUpdate(
     allocator: std.mem.Allocator,
     io: std.Io,
     repo_url: [:0]const u8,
-) !install_plan.InstallPlan {
+) !install_plan.Plan {
     _ = io;
     const parsed = try repo.RepoUrl.parse(repo_url);
     const cachedir = "/var/cache/xbps";
@@ -16,12 +18,12 @@ pub fn resolveForUpdate(
     const xhp = try xbps.init(null, cachedir, xbps.Flag.disable_syslog);
     errdefer xbps.end(xhp);
 
-    try xbps.repoStore(xhp, repo_url);
-    try xbps.rpoolSyncQuiet(xhp);
+    try xbps.storeRepo(xhp, repo_url);
+    try xbps.syncRpoolQ(xhp);
 
-    xbps.updateAllPkgs(xhp) catch |err| switch (err) {
+    xbps.updAllPkgs(xhp) catch |err| switch (err) {
         error.AlreadyExists => {
-            return install_plan.InstallPlan{
+            return install_plan.Plan{
                 .packages = &.{},
                 .repo_url = try allocator.dupe(u8, repo_url),
                 .cachedir = cachedir,
@@ -32,9 +34,9 @@ pub fn resolveForUpdate(
         else => |e| return e,
     };
 
-    try xbps.transactionPrepareQuiet(xhp);
+    try xbps.prepTxQ(xhp);
 
-    const pkg_metas = try xbps.transactionPkgs(allocator, xhp);
+    const pkg_metas = try xbps.txPkgs(allocator, xhp);
     defer {
         for (pkg_metas) |p| {
             allocator.free(p.pkgver);
@@ -44,9 +46,9 @@ pub fn resolveForUpdate(
         allocator.free(pkg_metas);
     }
 
-    const downloads = try shared_resolve.buildDownloads(allocator, parsed, cachedir, pkg_metas);
+    const downloads = try shared_resolve.buildDls(allocator, parsed, cachedir, pkg_metas);
 
-    return install_plan.InstallPlan{
+    return install_plan.Plan{
         .packages = downloads,
         .repo_url = try allocator.dupe(u8, repo_url),
         .cachedir = cachedir,

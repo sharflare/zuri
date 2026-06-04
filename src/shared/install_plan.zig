@@ -2,12 +2,14 @@ const std = @import("std");
 const dl = @import("download.zig");
 const xbps = @import("xbps.zig");
 
-pub const PlanMode = enum {
+// --- Types ---
+
+pub const Mode = enum {
     install,
     update,
 };
 
-pub const InstallPlan = struct {
+pub const Plan = struct {
     packages: []const dl.PackageDownload,
     repo_url: []const u8,
     rootdir: ?[]const u8 = null,
@@ -15,10 +17,12 @@ pub const InstallPlan = struct {
     dry_run: bool = false,
     yes: bool = false,
     xhp: *xbps.Handle,
-    mode: PlanMode = .install,
+    mode: Mode = .install,
 };
 
-pub fn deinitPlan(plan: *InstallPlan, allocator: std.mem.Allocator) void {
+// --- Cleanup ---
+
+pub fn deinit(plan: *Plan, allocator: std.mem.Allocator) void {
     for (plan.packages) |p| {
         allocator.free(p.name);
         allocator.free(p.version);
