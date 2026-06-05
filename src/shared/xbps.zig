@@ -10,9 +10,9 @@ const xbps_dictionary_keysym_t = xbps_object_t;
 const xbps_trans_type_t = c_uint;
 
 const trans_install: xbps_trans_type_t = 1;
-const trans_remove: xbps_trans_type_t = 2;
-const trans_update: xbps_trans_type_t = 4;
-const trans_reinstall: xbps_trans_type_t = 16;
+const trans_reinstall: xbps_trans_type_t = 2;
+const trans_update: xbps_trans_type_t = 3;
+const trans_remove: xbps_trans_type_t = 5;
 
 // --- Types ---
 
@@ -171,6 +171,7 @@ fn check(rc: c_int) !void {
         5 => error.IOError,
         30 => error.AccessDenied,
         95 => error.NotSupported,
+        34 => error.ChecksumMismatch,
         -1 => error.Unexpected,
         else => {
             std.log.err("xbps error: {d}", .{rc});
