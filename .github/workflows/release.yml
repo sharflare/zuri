@@ -47,7 +47,7 @@ jobs:
               mise use -g zig@0.16.0
               
               zig build --release=fast -Dcpu=baseline
-              PKG_VERSION="$(echo "${VERSION#v}" | sed 's/-/./g')"
+              PKG_VERSION="$(echo "${VERSION#v}" | sed "s/-/\./g")"
               if [ "${{ matrix.libc }}" = "musl" ]; then
                 XBPS_ARCH="${{ matrix.arch }}-musl"
               else
@@ -61,7 +61,7 @@ jobs:
                 -A "${XBPS_ARCH}" \
                 -n "zuri-${PKG_VERSION}_1" \
                 -s "a feature filled alternative to xbps" \
-                -H "https://codeberg.org/cassiel-os/zuri" \
+                -H "[https://codeberg.org/cassiel-os/zuri](https://codeberg.org/cassiel-os/zuri)" \
                 -l "GPL3" \
                 -m "shar <contact@sharflare.dev>" \
                 "${PKGDIR}"
@@ -80,6 +80,8 @@ jobs:
               openssl rsa -in /tmp/private.pem -pubout -out zig-out/bin/sharflare.pem
               rm /tmp/private.pem
 
+              rm zig-out/bin/zuri
+
               chown -R $HOST_UID:$HOST_GID .
             '
       - name: Upload artifact
@@ -93,10 +95,18 @@ jobs:
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
+
+      - name: Deduplicate release assets
+        run: |
+          cp zuri-x86_64-glibc/sharflare.pem ./sharflare.pem
+          rm zuri-*/sharflare.pem
+
       - name: Upload assets to release
         uses: softprops/action-gh-release@v2
         with:
-          files: zuri-*/*
+          files: |
+            zuri-*/*
+            sharflare.pem
           token: ${{ secrets.GITHUB_TOKEN }}
           draft: false
           prerelease: false
