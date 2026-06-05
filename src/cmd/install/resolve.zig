@@ -10,7 +10,7 @@ fn isXbpsFile(name: []const u8) bool {
     return std.mem.endsWith(u8, name, ".xbps");
 }
 
-const LOCAL_REPO_DIR = "/var/cache/xbps/local-repo";
+const LOCAL_REPO_DIR = "/var/cache/xbps/zurepo";
 
 // copy .xbps files to LOCAL_REPO_DIR, index with xbps-rindex so xbps can find them
 fn setupLocalRepo(allocator: std.mem.Allocator, io: std.Io, local_paths: []const []const u8) !void {
