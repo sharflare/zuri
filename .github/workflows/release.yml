@@ -103,7 +103,7 @@ jobs:
                 mkdir -p repodata/${arch}
                 find . -name "*${arch}.xbps" -exec cp {} repodata/${arch}/ \;
                 if ls repodata/${arch}/*.xbps 2>/dev/null; then
-                  xbps-rindex --add repodata/${arch}/*.xbps
+                  xbps-rindex --force-architecture --add repodata/${arch}/*.xbps
                 fi
               done
             '
