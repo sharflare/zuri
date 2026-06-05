@@ -5,6 +5,7 @@ zig-out/
 zig-pkg/
 *.o
 .codeberg
+STYLE.md
 
 # macOS
 .DS_Store

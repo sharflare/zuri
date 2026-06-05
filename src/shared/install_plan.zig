@@ -3,12 +3,8 @@ const dl = @import("download.zig");
 const xbps = @import("xbps.zig");
 const progress = @import("progress.zig");
 const shutdown = @import("shutdown.zig");
-const term = @import("term.zig");
-
-const stderrPrint = term.stderrPrint;
-const confirmProceed = term.confirmProceed;
-
-// --- Types ---
+const stderrPrint = @import("term.zig").stderrPrint;
+const confirmProceed = @import("term.zig").confirmProceed;
 
 pub const Mode = enum {
     install,
@@ -16,7 +12,7 @@ pub const Mode = enum {
 };
 
 pub const Plan = struct {
-    packages: []const dl.PackageDownload,
+    packages: []const dl.PkgDl,
     repo_url: []const u8,
     rootdir: ?[]const u8 = null,
     cachedir: []const u8 = "/var/cache/xbps",
@@ -26,8 +22,6 @@ pub const Plan = struct {
     xhp: *xbps.Handle,
     mode: Mode = .install,
 };
-
-// --- Cleanup ---
 
 pub fn deinit(plan: *Plan, allocator: std.mem.Allocator) void {
     for (plan.packages) |p| {
@@ -44,9 +38,7 @@ pub fn deinit(plan: *Plan, allocator: std.mem.Allocator) void {
     xbps.end(plan.xhp);
 }
 
-// --- Summary ---
-
-pub fn printSummary(io: std.Io, packages: []const dl.PackageDownload, mode: Mode) void {
+pub fn printSummary(io: std.Io, packages: []const dl.PkgDl, mode: Mode) void {
     var name_width: usize = 0;
     var total_size: u64 = 0;
     for (packages) |pkg| {
@@ -109,8 +101,6 @@ pub fn printSummary(io: std.Io, packages: []const dl.PackageDownload, mode: Mode
     }
 }
 
-// --- Commit ---
-
 fn commitViaXbps(io: std.Io, plan: *const Plan) !void {
     const xhp = plan.xhp;
 
@@ -140,8 +130,6 @@ fn commitViaXbps(io: std.Io, plan: *const Plan) !void {
     try xbps.cfgPkgs(xhp);
     try xbps.pkgdbUpd(xhp, true, false);
 }
-
-// --- Download & Commit ---
 
 pub fn downloadAndCommit(
     allocator: std.mem.Allocator,
@@ -178,7 +166,7 @@ pub fn downloadAndCommit(
         return;
     }
 
-    const config = dl.DownloadConfig{
+    const config = dl.DlCfg{
         .max_concurrent = 8,
         .retry_count = 3,
         .initial_retry_delay_ms = 1000,
@@ -193,7 +181,7 @@ pub fn downloadAndCommit(
         label.* = try std.fmt.allocPrint(allocator, "{s}-{s}", .{ pkg.name, pkg.version });
     }
 
-    var mp = try progress.MultiProgress.init(allocator, io, labels);
+    var mp = try progress.MultiProg.init(allocator, io, labels);
     defer mp.deinit();
     try mp.start();
     errdefer mp.stop();

@@ -251,6 +251,7 @@ fn searchRepoCb(repo: *Repo, arg: ?*anyopaque, loop_done: *bool) callconv(.c) c_
 
     if (@intFromPtr(repo.idx) == 0) return 0;
 
+    // walk all pkg keys in repo index, match name + desc
     const keys = xbps_dictionary_all_keys(repo.idx) orelse return 0;
     const nkeys = xbps_array_count(keys);
 
@@ -479,6 +480,7 @@ pub const PkgDownload = struct {
     sha256: []const u8,
     size: u64,
     local_path: []const u8,
+    repo: []const u8,
 };
 
 pub fn txPkgs(allocator: std.mem.Allocator, xhp: *Handle) ![]PkgDownload {
@@ -505,6 +507,7 @@ pub fn txPkgs(allocator: std.mem.Allocator, xhp: *Handle) ![]PkgDownload {
             if (p.filename.len > 0) allocator.free(p.filename);
             if (p.sha256.len > 0) allocator.free(p.sha256);
             if (p.local_path.len > 0) allocator.free(p.local_path);
+            if (p.repo.len > 0) allocator.free(p.repo);
         }
         allocator.free(result);
     }
@@ -533,7 +536,9 @@ pub fn txPkgs(allocator: std.mem.Allocator, xhp: *Handle) ![]PkgDownload {
 
         var fname_str: []const u8 = undefined;
         var local_path_str: []const u8 = "";
+        var repo_str: []const u8 = "";
 
+        // extract filename; fallback: pkgver[.arch].xbps
         var fname_dict: ?[*:0]const u8 = null;
         if (xbps_dictionary_get_cstring_nocopy(pkg, "filename", &fname_dict) and fname_dict != null) {
             fname_str = try allocator.dupe(u8, std.mem.sliceTo(fname_dict.?, 0));
@@ -551,12 +556,17 @@ pub fn txPkgs(allocator: std.mem.Allocator, xhp: *Handle) ![]PkgDownload {
         if (xbps_dictionary_get_cstring_nocopy(pkg, "local-path", &local_path_val) and local_path_val != null)
             local_path_str = try allocator.dupe(u8, std.mem.sliceTo(local_path_val.?, 0));
 
+        var rv: ?[*:0]const u8 = null;
+        if (xbps_dictionary_get_cstring_nocopy(pkg, "repository", &rv) and rv != null)
+            repo_str = try allocator.dupe(u8, std.mem.sliceTo(rv.?, 0));
+
         result[out] = .{
             .pkgver = try allocator.dupe(u8, std.mem.sliceTo(pv, 0)),
             .filename = fname_str,
             .sha256 = if (sha) |s| try allocator.dupe(u8, std.mem.sliceTo(s, 0)) else "",
             .size = fsz,
             .local_path = local_path_str,
+            .repo = repo_str,
         };
         out += 1;
     }

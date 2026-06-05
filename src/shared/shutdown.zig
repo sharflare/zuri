@@ -1,10 +1,10 @@
 const std = @import("std");
 
-pub var requested = std.atomic.Value(bool).init(false);
+pub var REQUESTED = std.atomic.Value(bool).init(false);
 
 fn handler(sig: std.os.linux.SIG) callconv(.c) void {
     _ = sig;
-    requested.store(true, .monotonic);
+    REQUESTED.store(true, .monotonic);
 }
 
 pub fn setup() void {
@@ -19,9 +19,9 @@ pub fn setup() void {
 }
 
 pub fn isCancelled() bool {
-    return requested.load(.monotonic);
+    return REQUESTED.load(.monotonic);
 }
 
 pub fn reset() void {
-    requested.store(false, .monotonic);
+    REQUESTED.store(false, .monotonic);
 }

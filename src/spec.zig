@@ -82,7 +82,7 @@ pub const root = cli.Command{
     .subcommands = &.{ install, remove, update, search, info, build, clean },
 };
 
-pub fn formatZuriError(writer: anytype, comptime cmd: cli.Command, err: cli.ParseError, args: []const []const u8) !void {
+pub fn formatZuriErr(writer: anytype, comptime cmd: cli.Command, err: cli.ParseError, args: []const []const u8) !void {
     switch (err) {
         cli.ParseError.AmbiguousSubcommand => {
             for (args) |arg| {

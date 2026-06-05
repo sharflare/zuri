@@ -2,7 +2,7 @@ const std = @import("std");
 const repo = @import("../../shared/repo.zig");
 const xbps = @import("../../shared/xbps.zig");
 const install_plan = @import("../../shared/install_plan.zig");
-const shared_resolve = @import("../../shared/resolve.zig");
+const sharedRslv = @import("../../shared/resolve.zig");
 
 // --- Local ---
 
@@ -10,10 +10,11 @@ fn isXbpsFile(name: []const u8) bool {
     return std.mem.endsWith(u8, name, ".xbps");
 }
 
-const local_repo_dir = "/var/cache/xbps/local-repo";
+const LOCAL_REPO_DIR = "/var/cache/xbps/local-repo";
 
+// copy .xbps files to LOCAL_REPO_DIR, index with xbps-rindex so xbps can find them
 fn setupLocalRepo(allocator: std.mem.Allocator, io: std.Io, local_paths: []const []const u8) !void {
-    std.Io.Dir.createDirAbsolute(io, local_repo_dir, .default_dir) catch |err| switch (err) {
+    std.Io.Dir.createDirAbsolute(io, LOCAL_REPO_DIR, .default_dir) catch |err| switch (err) {
         error.PathAlreadyExists => {},
         else => return err,
     };
@@ -26,7 +27,7 @@ fn setupLocalRepo(allocator: std.mem.Allocator, io: std.Io, local_paths: []const
 
         const filename = try std.fmt.allocPrint(allocator, "{s}.{s}.xbps", .{ pkgver, arch });
         defer allocator.free(filename);
-        const dest = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ local_repo_dir, filename });
+        const dest = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ LOCAL_REPO_DIR, filename });
         defer allocator.free(dest);
 
         std.Io.Dir.copyFile(std.Io.Dir.cwd(), path, std.Io.Dir.cwd(), dest, io, .{ .replace = true }) catch |err| {
@@ -80,7 +81,7 @@ pub fn rslvInstall(
     pkg_names: []const []const u8,
     force: bool,
 ) !install_plan.Plan {
-    const parsed = try repo.RepoUrl.parse(repo_url);
+    const parsed = try repo.parseRepoUrl(repo_url);
     const cachedir = "/var/cache/xbps";
 
     var local_paths: std.ArrayListUnmanaged([]const u8) = .empty;
@@ -110,10 +111,7 @@ pub fn rslvInstall(
 
     if (local_paths.items.len > 0) {
         try setupLocalRepo(allocator, io, local_paths.items);
-        var url_buf: [4096]u8 = undefined;
-        const url_slice = try std.fmt.bufPrint(&url_buf, "file://{s}", .{local_repo_dir});
-        url_buf[url_slice.len] = 0;
-        try xbps.storeRepo(xhp, url_buf[0..url_slice.len :0]);
+        try xbps.storeRepo(xhp, LOCAL_REPO_DIR);
     }
 
     try xbps.storeRepo(xhp, repo_url);
@@ -170,11 +168,12 @@ pub fn rslvInstall(
             allocator.free(p.filename);
             allocator.free(p.sha256);
             allocator.free(p.local_path);
+            if (p.repo.len > 0) allocator.free(p.repo);
         }
         allocator.free(pkg_metas);
     }
 
-    const downloads = try shared_resolve.buildDls(allocator, io, parsed, cachedir, pkg_metas);
+    const downloads = try sharedRslv.buildDls(allocator, io, parsed, cachedir, pkg_metas);
 
     return install_plan.Plan{
         .packages = downloads,

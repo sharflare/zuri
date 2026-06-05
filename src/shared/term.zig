@@ -1,7 +1,5 @@
 const std = @import("std");
 
-// --- Terminal IO ---
-
 pub fn stderrPrint(io: std.Io, comptime fmt: []const u8, args: anytype) void {
     var buf: [4096]u8 = undefined;
     var w = std.Io.File.stderr().writer(io, &buf);

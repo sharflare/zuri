@@ -2,7 +2,7 @@ const std = @import("std");
 const repo = @import("../../shared/repo.zig");
 const xbps = @import("../../shared/xbps.zig");
 const install_plan = @import("../../shared/install_plan.zig");
-const shared_resolve = @import("../../shared/resolve.zig");
+const sharedRslv = @import("../../shared/resolve.zig");
 
 // --- Resolve Update ---
 
@@ -11,7 +11,7 @@ pub fn rslvUpdate(
     io: std.Io,
     repo_url: [:0]const u8,
 ) !install_plan.Plan {
-    const parsed = try repo.RepoUrl.parse(repo_url);
+    const parsed = try repo.parseRepoUrl(repo_url);
     const cachedir = "/var/cache/xbps";
 
     const xhp = try xbps.init(null, cachedir, xbps.Flag.disable_syslog);
@@ -42,11 +42,12 @@ pub fn rslvUpdate(
             allocator.free(p.filename);
             allocator.free(p.sha256);
             allocator.free(p.local_path);
+            if (p.repo.len > 0) allocator.free(p.repo);
         }
         allocator.free(pkg_metas);
     }
 
-    const downloads = try shared_resolve.buildDls(allocator, io, parsed, cachedir, pkg_metas);
+    const downloads = try sharedRslv.buildDls(allocator, io, parsed, cachedir, pkg_metas);
 
     return install_plan.Plan{
         .packages = downloads,

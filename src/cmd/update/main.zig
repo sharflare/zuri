@@ -1,8 +1,6 @@
 const std = @import("std");
 const install_plan = @import("../../shared/install_plan.zig");
-const term = @import("../../shared/term.zig");
-
-const stderrPrint = term.stderrPrint;
+const stderrPrint = @import("../../shared/term.zig").stderrPrint;
 
 pub fn exec(allocator: std.mem.Allocator, plan: install_plan.Plan, environ_map: *const std.process.Environ.Map) !void {
     const io = std.Io.Threaded.global_single_threaded.io();

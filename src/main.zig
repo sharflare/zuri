@@ -15,10 +15,10 @@ const xbps = @import("shared/xbps.zig");
 // --- Commands ---
 
 const install_exec = @import("cmd/install/main.zig");
-const install_rslv = @import("cmd/install/resolve.zig");
+const installRslv = @import("cmd/install/resolve.zig");
 const remove_exec = @import("cmd/remove/main.zig");
 const update_exec = @import("cmd/update/main.zig");
-const update_rslv = @import("cmd/update/resolve.zig");
+const updateRslv = @import("cmd/update/resolve.zig");
 const search_exec = @import("cmd/search/main.zig");
 const info_exec = @import("cmd/info/main.zig");
 const clean_exec = @import("cmd/clean/main.zig");
@@ -36,7 +36,7 @@ pub fn main(init: std.process.Init) !void {
     const stderr = &stderr_writer.interface;
 
     var result = cli.parse(spec.root, args[1..], gpa) catch |err| {
-        try spec.formatZuriError(stderr, spec.root, err, args[1..]);
+        try spec.formatZuriErr(stderr, spec.root, err, args[1..]);
         return;
     };
     defer cli.deinit(spec.root, &result, gpa);
@@ -57,7 +57,7 @@ pub fn main(init: std.process.Init) !void {
             const repo_url: [:0]const u8 = try repo.getRepoUrl(init.minimal.environ, stderr, &repo_buf);
 
             try stderr.print("Resolving dependencies... ", .{});
-            var p = install_rslv.rslvInstall(gpa, init.io, repo_url, inst.positionals, inst.flags.@"force") catch |err| switch (err) {
+            var p = installRslv.rslvInstall(gpa, init.io, repo_url, inst.positionals, inst.flags.@"force") catch |err| switch (err) {
                 error.NotFound => {
                     try stderr.print("failed\n", .{});
                     return;
@@ -87,7 +87,7 @@ pub fn main(init: std.process.Init) !void {
             const repo_url: [:0]const u8 = try repo.getRepoUrl(init.minimal.environ, stderr, &repo_buf);
 
             try stderr.print("Resolving dependencies... ", .{});
-            var p = update_rslv.rslvUpdate(gpa, init.io, repo_url) catch |err| switch (err) {
+            var p = updateRslv.rslvUpdate(gpa, init.io, repo_url) catch |err| switch (err) {
                 error.NotFound => {
                     try stderr.print("failed\n", .{});
                     return;

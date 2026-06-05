@@ -1,20 +1,31 @@
 const std = @import("std");
 const dl = @import("download.zig");
 const repo = @import("repo.zig");
+const PkgDownload = @import("xbps.zig").PkgDownload;
 
-// --- Build ---
-
-pub fn buildDls(allocator: std.mem.Allocator, io: std.Io, parsed: repo.RepoUrl, cachedir: []const u8, pkg_metas: []const @import("xbps.zig").PkgDownload) ![]dl.PackageDownload {
-    var downloads = try allocator.alloc(dl.PackageDownload, pkg_metas.len);
+pub fn buildDls(allocator: std.mem.Allocator, io: std.Io, parsed: repo.RepoUrl, cachedir: []const u8, pkg_metas: []const PkgDownload) ![]dl.PkgDl {
+    var downloads = try allocator.alloc(dl.PkgDl, pkg_metas.len);
     errdefer allocator.free(downloads);
 
     for (pkg_metas, 0..) |meta, i| {
         const dash_pos = std.mem.lastIndexOfScalar(u8, meta.pkgver, '-') orelse
             return error.InvalidPkgver;
 
-        if (meta.local_path.len > 0) {
-            const file = std.Io.Dir.openFile(std.Io.Dir.cwd(), io, meta.local_path, .{}) catch |err| {
-                std.log.err("cannot open local package '{s}': {s}", .{ meta.local_path, @errorName(err) });
+        // xbps 0.60.7 skips local-path for local repos; build from repo + filename
+        const local = meta.local_path.len > 0 or
+            (meta.repo.len > 0 and meta.repo[0] == '/');
+
+        if (local) {
+            const base = if (meta.local_path.len > 0) meta.local_path else meta.repo;
+            const lp = if (meta.local_path.len > 0) base else lp: {
+                var buf: [4096]u8 = undefined;
+                const s = try std.fmt.bufPrint(&buf, "{s}/{s}", .{ base, meta.filename });
+                break :lp try allocator.dupe(u8, s);
+            };
+            defer if (meta.local_path.len == 0) allocator.free(lp);
+
+            const file = std.Io.Dir.openFile(std.Io.Dir.cwd(), io, lp, .{}) catch |err| {
+                std.log.err("cannot open local package '{s}': {s}", .{ lp, @errorName(err) });
                 return error.NotFound;
             };
             defer file.close(io);
@@ -26,9 +37,9 @@ pub fn buildDls(allocator: std.mem.Allocator, io: std.Io, parsed: repo.RepoUrl, 
                 .port = 0,
                 .path = try allocator.dupe(u8, ""),
                 .size = st.size,
-                .dest_path = try allocator.dupe(u8, meta.local_path),
+                .dest_path = try allocator.dupe(u8, lp),
                 .sha256 = try allocator.dupe(u8, ""),
-                .local_path = try allocator.dupe(u8, meta.local_path),
+                .local_path = try allocator.dupe(u8, lp),
             };
         } else {
             downloads[i] = .{

@@ -1,9 +1,7 @@
 const std = @import("std");
 const xbps = @import("../../shared/xbps.zig");
 const progress = @import("../../shared/progress.zig");
-const term = @import("../../shared/term.zig");
-
-const stderrPrint = term.stderrPrint;
+const stderrPrint = @import("../../shared/term.zig").stderrPrint;
 
 pub fn exec(allocator: std.mem.Allocator, io: std.Io, pkg_name: []const u8) !void {
     const xhp = try xbps.init(null, "/var/cache/xbps", xbps.Flag.disable_syslog);

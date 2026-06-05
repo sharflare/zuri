@@ -1,5 +1,4 @@
 const std = @import("std");
-const repo = @import("../../shared/repo.zig");
 const xbps = @import("../../shared/xbps.zig");
 
 pub fn exec(allocator: std.mem.Allocator, io: std.Io, repo_url: [:0]const u8, query: []const u8) !void {

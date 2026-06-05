@@ -1,9 +1,7 @@
 const std = @import("std");
 const xbps = @import("../../shared/xbps.zig");
-const term = @import("../../shared/term.zig");
-
-const stderrPrint = term.stderrPrint;
-const confirmProceed = term.confirmProceed;
+const stderrPrint = @import("../../shared/term.zig").stderrPrint;
+const confirmProceed = @import("../../shared/term.zig").confirmProceed;
 
 // --- Exec ---
 
@@ -43,6 +41,7 @@ pub fn exec(gpa: std.mem.Allocator, io: std.Io, pkg_names: []const []const u8, k
             gpa.free(p.filename);
             gpa.free(p.sha256);
             gpa.free(p.local_path);
+            if (p.repo.len > 0) gpa.free(p.repo);
         }
         gpa.free(pkg_metas);
     }

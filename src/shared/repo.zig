@@ -1,8 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-// --- Repo URL ---
-
 pub const RepoUrl = struct {
     host: []const u8,
     port: u16,
@@ -30,9 +28,7 @@ pub const RepoUrl = struct {
     }
 };
 
-// --- Repo Dir ---
-
-const default_repo_prefix = "https://repo-default.voidlinux.org/current/";
+const DEFAULT_REPO_PREFIX = "https://repo-default.voidlinux.org/current/";
 
 fn getRepoDir() ?[]const u8 {
     return switch (builtin.cpu.arch) {
@@ -46,6 +42,10 @@ fn getRepoDir() ?[]const u8 {
     };
 }
 
+pub fn parseRepoUrl(url: []const u8) !RepoUrl {
+    return RepoUrl.parse(url);
+}
+
 pub fn getRepoUrl(env: std.process.Environ, stderr: anytype, buf: *[256]u8) ![:0]const u8 {
     if (env.getPosix("ZURI_REPO_URL")) |env_val| return env_val;
 
@@ -57,9 +57,9 @@ pub fn getRepoUrl(env: std.process.Environ, stderr: anytype, buf: *[256]u8) ![:0
     };
 
     const repo_slice = if (repo_dir.len == 0)
-        try std.fmt.bufPrint(buf, "{s}", .{default_repo_prefix})
+        try std.fmt.bufPrint(buf, "{s}", .{DEFAULT_REPO_PREFIX})
     else
-        try std.fmt.bufPrint(buf, "{s}{s}/", .{ default_repo_prefix, repo_dir });
+        try std.fmt.bufPrint(buf, "{s}{s}/", .{ DEFAULT_REPO_PREFIX, repo_dir });
     buf.*[repo_slice.len] = 0;
     return buf[0..repo_slice.len :0];
 }

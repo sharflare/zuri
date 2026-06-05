@@ -1,8 +1,6 @@
 const std = @import("std");
 const xbps = @import("../../shared/xbps.zig");
-const term = @import("../../shared/term.zig");
-
-const stderrPrint = term.stderrPrint;
+const stderrPrint = @import("../../shared/term.zig").stderrPrint;
 
 fn printSize(io: std.Io, bytes: u64) void {
     const units = &[_][]const u8{ "B", "KB", "MB", "GB", "TB" };
@@ -64,6 +62,7 @@ pub fn exec(allocator: std.mem.Allocator, io: std.Io, all_flag: bool, orphans: b
                 allocator.free(p.filename);
                 allocator.free(p.sha256);
                 allocator.free(p.local_path);
+                if (p.repo.len > 0) allocator.free(p.repo);
             }
             allocator.free(pkg_metas);
         }

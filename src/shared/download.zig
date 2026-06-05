@@ -2,9 +2,7 @@ const std = @import("std");
 const progress = @import("progress.zig");
 const shutdown = @import("shutdown.zig");
 
-// --- Types ---
-
-pub const PackageDownload = struct {
+pub const PkgDl = struct {
     name: []const u8,
     version: []const u8,
     host: []const u8,
@@ -16,13 +14,11 @@ pub const PackageDownload = struct {
     local_path: []const u8,
 };
 
-pub const DownloadConfig = struct {
+pub const DlCfg = struct {
     max_concurrent: u8 = 8,
     retry_count: u3 = 3,
     initial_retry_delay_ms: u64 = 1000,
 };
-
-// --- Shared Client ---
 
 pub const SharedClient = struct {
     client: std.http.Client,
@@ -40,13 +36,11 @@ pub const SharedClient = struct {
     }
 };
 
-// --- Fetch All ---
-
 pub fn fetchAll(
     allocator: std.mem.Allocator,
-    downloads: []const PackageDownload,
-    config: DownloadConfig,
-    mp: *progress.MultiProgress,
+    downloads: []const PkgDl,
+    config: DlCfg,
+    mp: *progress.MultiProg,
     environ_map: *const std.process.Environ.Map,
 ) !void {
     var threaded = std.Io.Threaded.init(allocator, .{
@@ -66,7 +60,7 @@ pub fn fetchAll(
     var cancelled = std.atomic.Value(bool).init(false);
 
     for (downloads, 0..) |dl, i| {
-        group.async(io, fetchPackage, .{ dl, @as(usize, i), config, mp, &semaphore, &cancelled, io, &shared.client });
+        group.async(io, fetchPkg, .{ dl, @as(usize, i), config, mp, &semaphore, &cancelled, io, &shared.client });
     }
 
     try group.await(io);
@@ -74,13 +68,11 @@ pub fn fetchAll(
     if (mp.anyFailed()) return error.DownloadFailed;
 }
 
-// --- Single Package ---
-
-fn fetchPackage(
-    dl: PackageDownload,
+fn fetchPkg(
+    dl: PkgDl,
     idx: usize,
-    cfg: DownloadConfig,
-    mp: *progress.MultiProgress,
+    cfg: DlCfg,
+    mp: *progress.MultiProg,
     sem: *std.Io.Semaphore,
     cancelled: *std.atomic.Value(bool),
     io: std.Io,
@@ -91,7 +83,6 @@ fn fetchPackage(
         return;
     }
 
-    // Local packages do not need downloading
     if (dl.local_path.len > 0) {
         mp.setTotal(idx, dl.size);
         mp.setCurrent(idx, dl.size);
@@ -157,9 +148,7 @@ fn fetchPackage(
     mp.setFailed(idx);
 }
 
-// --- Cache Check ---
-
-pub fn destCached(dl: PackageDownload, io: std.Io) bool {
+pub fn destCached(dl: PkgDl, io: std.Io) bool {
     if (dl.sha256.len == 0) return false;
     const hex = sha256Of(dl.dest_path, io) catch return false;
     defer std.heap.page_allocator.free(hex);
@@ -167,8 +156,6 @@ pub fn destCached(dl: PackageDownload, io: std.Io) bool {
     if (!match) std.Io.Dir.deleteFileAbsolute(io, dl.dest_path) catch {};
     return match;
 }
-
-// --- Proxy ---
 
 fn proxyFromEnv(client: *std.http.Client, environ_map: *const std.process.Environ.Map) void {
     const allocator = client.allocator;
@@ -216,9 +203,7 @@ fn createProxy(url: []const u8, allocator: std.mem.Allocator) ?*std.http.Client.
     return proxy;
 }
 
-// --- Driver ---
-
-fn blockingDl(dl: PackageDownload, idx: usize, mp: *progress.MultiProgress, io: std.Io, client: *std.http.Client) !u64 {
+fn blockingDl(dl: PkgDl, idx: usize, mp: *progress.MultiProg, io: std.Io, client: *std.http.Client) !u64 {
     var url_buf: [4096]u8 = undefined;
     const url = if (dl.port == 443)
         try std.fmt.bufPrint(&url_buf, "https://{s}{s}", .{ dl.host, dl.path })
@@ -291,8 +276,6 @@ fn blockingDl(dl: PackageDownload, idx: usize, mp: *progress.MultiProgress, io: 
 
     return total;
 }
-
-// --- Hash ---
 
 fn sha256Of(path: []const u8, io: std.Io) ![]u8 {
     var file = try std.Io.Dir.openFileAbsolute(io, path, .{});
