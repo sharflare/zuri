@@ -13,7 +13,6 @@ pub const Mode = enum {
 
 pub const Plan = struct {
     packages: []const dl.PkgDl,
-    repo_url: []const u8,
     rootdir: ?[]const u8 = null,
     cachedir: []const u8 = "/var/cache/xbps",
     dry_run: bool = false,
@@ -34,7 +33,6 @@ pub fn deinit(plan: *Plan, allocator: std.mem.Allocator) void {
         allocator.free(p.local_path);
     }
     allocator.free(plan.packages);
-    allocator.free(plan.repo_url);
     xbps.end(plan.xhp);
 }
 

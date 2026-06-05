@@ -9,22 +9,22 @@ const sharedRslv = @import("../../shared/resolve.zig");
 pub fn rslvUpdate(
     allocator: std.mem.Allocator,
     io: std.Io,
-    repo_url: [:0]const u8,
+    repos: []const repo.Repo,
 ) !install_plan.Plan {
-    const parsed = try repo.parseRepoUrl(repo_url);
     const cachedir = "/var/cache/xbps";
 
     const xhp = try xbps.init(null, cachedir, xbps.Flag.disable_syslog);
     errdefer xbps.end(xhp);
 
-    try xbps.storeRepo(xhp, repo_url);
+    for (repos) |r| {
+        xbps.storeRepo(xhp, r.url) catch {};
+    }
     try xbps.syncRpoolQ(xhp);
 
     xbps.updAllPkgs(xhp) catch |err| switch (err) {
         error.AlreadyExists => {
             return install_plan.Plan{
                 .packages = &.{},
-                .repo_url = try allocator.dupe(u8, repo_url),
                 .cachedir = cachedir,
                 .xhp = xhp,
                 .mode = .update,
@@ -47,11 +47,10 @@ pub fn rslvUpdate(
         allocator.free(pkg_metas);
     }
 
-    const downloads = try sharedRslv.buildDls(allocator, io, parsed, cachedir, pkg_metas);
+    const downloads = try sharedRslv.buildDls(allocator, io, cachedir, pkg_metas);
 
     return install_plan.Plan{
         .packages = downloads,
-        .repo_url = try allocator.dupe(u8, repo_url),
         .cachedir = cachedir,
         .xhp = xhp,
         .mode = .update,

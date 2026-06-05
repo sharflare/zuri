@@ -77,11 +77,10 @@ fn setupLocalRepo(allocator: std.mem.Allocator, io: std.Io, local_paths: []const
 pub fn rslvInstall(
     allocator: std.mem.Allocator,
     io: std.Io,
-    repo_url: [:0]const u8,
+    repos: []const repo.Repo,
     pkg_names: []const []const u8,
     force: bool,
 ) !install_plan.Plan {
-    const parsed = try repo.parseRepoUrl(repo_url);
     const cachedir = "/var/cache/xbps";
 
     var local_paths: std.ArrayListUnmanaged([]const u8) = .empty;
@@ -114,7 +113,9 @@ pub fn rslvInstall(
         try xbps.storeRepo(xhp, LOCAL_REPO_DIR);
     }
 
-    try xbps.storeRepo(xhp, repo_url);
+    for (repos) |r| {
+        xbps.storeRepo(xhp, r.url) catch {};
+    }
     try xbps.syncRpoolQ(xhp);
 
     for (local_paths.items) |path| {
@@ -173,11 +174,10 @@ pub fn rslvInstall(
         allocator.free(pkg_metas);
     }
 
-    const downloads = try sharedRslv.buildDls(allocator, io, parsed, cachedir, pkg_metas);
+    const downloads = try sharedRslv.buildDls(allocator, io, cachedir, pkg_metas);
 
     return install_plan.Plan{
         .packages = downloads,
-        .repo_url = try allocator.dupe(u8, repo_url),
         .cachedir = cachedir,
         .xhp = xhp,
     };

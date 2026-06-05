@@ -41,8 +41,6 @@ pub fn main(init: std.process.Init) !void {
     };
     defer cli.deinit(spec.root, &result, gpa);
 
-    var repo_buf: [256]u8 = undefined;
-
     switch (result.active) {
         .install => |inst| {
             if (inst.positionals.len == 0) {
@@ -54,10 +52,14 @@ pub fn main(init: std.process.Init) !void {
                 return;
             }
 
-            const repo_url: [:0]const u8 = try repo.getRepoUrl(init.minimal.environ, stderr, &repo_buf);
+            const repos = try repo.loadRepos(gpa, init.io, init.minimal.environ, stderr);
+            defer {
+                for (repos) |r| gpa.free(r.url);
+                gpa.free(repos);
+            }
 
             try stderr.print("Resolving dependencies... ", .{});
-            var p = installRslv.rslvInstall(gpa, init.io, repo_url, inst.positionals, inst.flags.@"force") catch |err| switch (err) {
+            var p = installRslv.rslvInstall(gpa, init.io, repos, inst.positionals, inst.flags.@"force") catch |err| switch (err) {
                 error.NotFound => {
                     try stderr.print("failed\n", .{});
                     return;
@@ -84,10 +86,14 @@ pub fn main(init: std.process.Init) !void {
                 return;
             }
 
-            const repo_url: [:0]const u8 = try repo.getRepoUrl(init.minimal.environ, stderr, &repo_buf);
+            const repos = try repo.loadRepos(gpa, init.io, init.minimal.environ, stderr);
+            defer {
+                for (repos) |r| gpa.free(r.url);
+                gpa.free(repos);
+            }
 
             try stderr.print("Resolving dependencies... ", .{});
-            var p = updateRslv.rslvUpdate(gpa, init.io, repo_url) catch |err| switch (err) {
+            var p = updateRslv.rslvUpdate(gpa, init.io, repos) catch |err| switch (err) {
                 error.NotFound => {
                     try stderr.print("failed\n", .{});
                     return;
@@ -102,9 +108,13 @@ pub fn main(init: std.process.Init) !void {
             try update_exec.exec(gpa, p, init.environ_map);
         },
         .search => |se| {
-            const repo_url: [:0]const u8 = try repo.getRepoUrl(init.minimal.environ, stderr, &repo_buf);
+            const repos = try repo.loadRepos(gpa, init.io, init.minimal.environ, stderr);
+            defer {
+                for (repos) |r| gpa.free(r.url);
+                gpa.free(repos);
+            }
             for (se.positionals) |q| {
-                try search_exec.exec(gpa, init.io, repo_url, q);
+                try search_exec.exec(gpa, init.io, repos, q);
             }
         },
         .info => |inf| {

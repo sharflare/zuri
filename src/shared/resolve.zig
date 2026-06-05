@@ -3,7 +3,7 @@ const dl = @import("download.zig");
 const repo = @import("repo.zig");
 const PkgDownload = @import("xbps.zig").PkgDownload;
 
-pub fn buildDls(allocator: std.mem.Allocator, io: std.Io, parsed: repo.RepoUrl, cachedir: []const u8, pkg_metas: []const PkgDownload) ![]dl.PkgDl {
+pub fn buildDls(allocator: std.mem.Allocator, io: std.Io, cachedir: []const u8, pkg_metas: []const PkgDownload) ![]dl.PkgDl {
     var downloads = try allocator.alloc(dl.PkgDl, pkg_metas.len);
     errdefer allocator.free(downloads);
 
@@ -11,7 +11,6 @@ pub fn buildDls(allocator: std.mem.Allocator, io: std.Io, parsed: repo.RepoUrl, 
         const dash_pos = std.mem.lastIndexOfScalar(u8, meta.pkgver, '-') orelse
             return error.InvalidPkgver;
 
-        // xbps 0.60.7 skips local-path for local repos; build from repo + filename
         const local = meta.local_path.len > 0 or
             (meta.repo.len > 0 and meta.repo[0] == '/');
 
@@ -42,6 +41,11 @@ pub fn buildDls(allocator: std.mem.Allocator, io: std.Io, parsed: repo.RepoUrl, 
                 .local_path = try allocator.dupe(u8, lp),
             };
         } else {
+            const parsed = repo.parseRepoUrl(meta.repo) catch |err| {
+                std.log.err("invalid repository URL '{s}' for {s}", .{ meta.repo, meta.pkgver });
+                return err;
+            };
+
             downloads[i] = .{
                 .name = try allocator.dupe(u8, meta.pkgver[0..dash_pos]),
                 .version = try allocator.dupe(u8, meta.pkgver[dash_pos + 1 ..]),

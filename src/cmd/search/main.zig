@@ -1,11 +1,14 @@
 const std = @import("std");
+const repo = @import("../../shared/repo.zig");
 const xbps = @import("../../shared/xbps.zig");
 
-pub fn exec(allocator: std.mem.Allocator, io: std.Io, repo_url: [:0]const u8, query: []const u8) !void {
+pub fn exec(allocator: std.mem.Allocator, io: std.Io, repos: []const repo.Repo, query: []const u8) !void {
     const xhp = try xbps.init(null, "/var/cache/xbps", xbps.Flag.disable_syslog);
     defer xbps.end(xhp);
 
-    try xbps.storeRepo(xhp, repo_url);
+    for (repos) |r| {
+        xbps.storeRepo(xhp, r.url) catch {};
+    }
     try xbps.syncRpool(xhp);
 
     const results = try xbps.searchPkgs(allocator, xhp, query);
