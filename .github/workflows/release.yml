@@ -1,12 +1,9 @@
 name: Release
-
 on:
   release:
     types: [published]
-
 permissions:
   contents: write
-
 jobs:
   build:
     strategy:
@@ -37,6 +34,7 @@ jobs:
             -e HOST_UID=$(id -u) \
             -e HOST_GID=$(id -g) \
             -e VERSION=${{ github.event.release.tag_name }} \
+            -e PRIVKEY="${{ secrets.XBPS_PRIVKEY }}" \
             -v ${{ github.workspace }}:/workspace \
             -w /workspace \
             ${{ matrix.container }} \
@@ -49,20 +47,16 @@ jobs:
               mise use -g zig@0.16.0
               
               zig build --release=fast -Dcpu=baseline
-
               PKG_VERSION="$(echo "${VERSION#v}" | sed 's/-/./g')"
-
               if [ "${{ matrix.libc }}" = "musl" ]; then
                 XBPS_ARCH="${{ matrix.arch }}-musl"
               else
                 XBPS_ARCH="${{ matrix.arch }}"
               fi
-
               PKGDIR=/tmp/zuri-pkg
               mkdir -p "${PKGDIR}/usr/bin"
               cp zig-out/bin/zuri "${PKGDIR}/usr/bin/zuri"
               chmod 0755 "${PKGDIR}/usr/bin/zuri"
-
               xbps-create \
                 -A "${XBPS_ARCH}" \
                 -n "zuri-${PKG_VERSION}_1" \
@@ -71,10 +65,20 @@ jobs:
                 -l "GPL3" \
                 -m "shar <contact@sharflare.dev>" \
                 "${PKGDIR}"
-
               mv "zuri-${PKG_VERSION}_1.${XBPS_ARCH}.xbps" zig-out/bin/
 
+              echo "${PRIVKEY}" > /tmp/private.pem
               xbps-rindex --add zig-out/bin/zuri-${PKG_VERSION}_1.${XBPS_ARCH}.xbps
+              xbps-rindex \
+                --privkey /tmp/private.pem \
+                --signedby "shar <contact@sharflare.dev>" \
+                --sign zig-out/bin
+              xbps-rindex \
+                --privkey /tmp/private.pem \
+                --signedby "shar <contact@sharflare.dev>" \
+                --sign-pkg zig-out/bin/zuri-${PKG_VERSION}_1.${XBPS_ARCH}.xbps
+              openssl rsa -in /tmp/private.pem -pubout -out zig-out/bin/sharflare.pem
+              rm /tmp/private.pem
 
               chown -R $HOST_UID:$HOST_GID .
             '
@@ -83,7 +87,6 @@ jobs:
         with:
           name: zuri-${{ matrix.arch }}-${{ matrix.libc }}
           path: zig-out/bin/
-
   release:
     needs: build
     runs-on: ubuntu-latest
