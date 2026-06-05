@@ -1,4 +1,5 @@
 const std = @import("std");
+const zon = @import("build.zig.zon");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -38,6 +39,10 @@ pub fn build(b: *std.Build) void {
     exe.root_module.linkSystemLibrary("lz4", .{ .preferred_link_mode = link_mode });
     exe.root_module.linkSystemLibrary("atomic", .{ .preferred_link_mode = link_mode });
     if (target.result.cpu.arch == .aarch64) linkLibGcc(b, exe, target);
+
+    const options = b.addOptions();
+    options.addOption([]const u8, "version", zon.version);
+    exe.root_module.addImport("bzon", options.createModule());
 
     b.installArtifact(exe);
 

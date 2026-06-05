@@ -1,4 +1,5 @@
 const cli = @import("clingy");
+const opts = @import("bzon");
 
 pub const install = cli.Command{
     .name = "install",
@@ -72,7 +73,7 @@ pub const clean = cli.Command{
 pub const root = cli.Command{
     .name = "zuri",
     .description = "a feature filled alternative to xbps",
-    .version = "0.1.0",
+    .version = opts.version,
     .flags = &.{
         cli.Flag{ .long = "dry-run", .short = 'n', .kind = .bool, .description = "Show what would happen without executing" },
         cli.Flag{ .long = "no-color", .short = 'C', .kind = .bool, .description = "Disable color output" },
