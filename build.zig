@@ -5,8 +5,8 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const dynamic = b.option(bool, "dynamic", "Use dynamic linking for system libraries (default: static)") orelse false;
-    const link_mode: std.builtin.LinkMode = if (dynamic) .dynamic else .static;
+    const static = b.option(bool, "static", "Use static linking for system libraries (default: dynamic)") orelse false;
+    const link_mode: std.builtin.LinkMode = if (static) .static else .dynamic;
 
     const exe = b.addExecutable(.{
         .name = "zuri",
