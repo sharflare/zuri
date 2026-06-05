@@ -20,10 +20,6 @@ pub fn build(b: *std.Build) void {
     exe.root_module.addImport("clingy", clingy_dep.module("clingy"));
 
     exe.root_module.link_libc = true;
-    exe.root_module.addCSourceFiles(.{
-        .files = &.{"src/shared/xbps_bridge.c"},
-        .flags = &.{"-std=gnu99"},
-    });
 
     exe.root_module.linkSystemLibrary("xbps", .{ .preferred_link_mode = link_mode });
     exe.root_module.linkSystemLibrary("ssl", .{ .preferred_link_mode = link_mode });
