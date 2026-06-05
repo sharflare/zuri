@@ -28,17 +28,15 @@ jobs:
             arch: aarch64
             libc: musl
             container: ghcr.io/void-linux/void-musl-full:latest
-
     runs-on: ${{ matrix.os }}
-
     steps:
       - uses: actions/checkout@v4
-
       - name: Build inside Void Linux container
         run: |
           docker run --rm \
             -e HOST_UID=$(id -u) \
             -e HOST_GID=$(id -g) \
+            -e VERSION=${{ github.event.release.tag_name }} \
             -v ${{ github.workspace }}:/workspace \
             -w /workspace \
             ${{ matrix.container }} \
@@ -51,27 +49,46 @@ jobs:
               mise use -g zig@0.16.0
               
               zig build --release=fast -Dcpu=baseline
-              
-              mv zig-out/bin/zuri zig-out/bin/zuri-${{ matrix.arch }}-${{ matrix.libc }}
+
+              PKG_VERSION="${VERSION#v}"
+              PKG_VERSION="${PKG_VERSION//-/.}"
+
+              if [ "${{ matrix.libc }}" = "musl" ]; then
+                XBPS_ARCH="${{ matrix.arch }}-musl"
+              else
+                XBPS_ARCH="${{ matrix.arch }}"
+              fi
+
+              PKGDIR=/tmp/zuri-pkg
+              mkdir -p "${PKGDIR}/usr/bin"
+              cp zig-out/bin/zuri "${PKGDIR}/usr/bin/zuri"
+              chmod 0755 "${PKGDIR}/usr/bin/zuri"
+
+              xbps-create \
+                --architecture "${XBPS_ARCH}" \
+                --pkgver "zuri-${PKG_VERSION}_1" \
+                --desc "a feature filled alternative to xbps" \
+                --homepage "https://codeberg.org/cassiel-os/zuri" \
+                --license "GPL3" \
+                --maintainer "shar <contact@sharflare.dev>" \
+                --destdir "${PKGDIR}" \
+                zig-out/bin/zuri-${PKG_VERSION}_1.${XBPS_ARCH}.xbps
               
               chown -R $HOST_UID:$HOST_GID .
             '
-
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: zuri-${{ matrix.arch }}-${{ matrix.libc }}
-          path: zig-out/bin/zuri-${{ matrix.arch }}-${{ matrix.libc }}
-
+          path: zig-out/bin/*.xbps
   release:
     needs: build
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
-
       - name: Upload assets to release
         uses: softprops/action-gh-release@v2
         with:
-          files: zuri-*/zuri-*
+          files: zuri-*/*.xbps
           token: ${{ secrets.GITHUB_TOKEN }}
