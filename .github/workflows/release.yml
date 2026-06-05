@@ -43,11 +43,11 @@ jobs:
             sh -c '
               xbps-install -Syu -y
               xbps-install -y base-devel libxbps-devel curl mise
-
+              
               export PATH="/root/.local/share/mise/shims:$PATH"
               mise trust
               mise use -g zig@0.16.0
-
+              
               zig build --release=fast -Dcpu=baseline
 
               PKG_VERSION="$(echo "${VERSION#v}" | sed 's/-/./g')"
@@ -74,48 +74,18 @@ jobs:
 
               mv "zuri-${PKG_VERSION}_1.${XBPS_ARCH}.xbps" zig-out/bin/
 
+              xbps-rindex --add zig-out/bin/zuri-${PKG_VERSION}_1.${XBPS_ARCH}.xbps
+
               chown -R $HOST_UID:$HOST_GID .
             '
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: zuri-${{ matrix.arch }}-${{ matrix.libc }}
-          path: zig-out/bin/*.xbps
-
-  repodata:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-
-      - name: Generate repodata indexes
-        run: |
-          docker run --rm \
-            -v ${{ github.workspace }}:/workspace \
-            -w /workspace \
-            ghcr.io/void-linux/void-glibc-full:latest \
-            sh -c '
-              xbps-install -Syu -y
-              xbps-install -y xbps
-
-              for arch in x86_64 x86_64-musl aarch64 aarch64-musl; do
-                mkdir -p repodata/${arch}
-                find . -name "*${arch}.xbps" -exec cp {} repodata/${arch}/ \;
-                if ls repodata/${arch}/*.xbps 2>/dev/null; then
-                  xbps-rindex --force-architecture --add repodata/${arch}/*.xbps
-                fi
-              done
-            '
-
-      - name: Upload repodata artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: repodata
-          path: repodata/**/*-repodata
+          path: zig-out/bin/
 
   release:
-    needs: repodata
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
@@ -123,9 +93,7 @@ jobs:
       - name: Upload assets to release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            zuri-*/*.xbps
-            repodata/**/*-repodata
+          files: zuri-*/*
           token: ${{ secrets.GITHUB_TOKEN }}
           draft: false
           prerelease: false
