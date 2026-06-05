@@ -50,8 +50,7 @@ jobs:
               
               zig build --release=fast -Dcpu=baseline
 
-              PKG_VERSION="${VERSION#v}"
-              PKG_VERSION="${PKG_VERSION//-/.}"
+              PKG_VERSION="$(echo "${VERSION#v}" | sed 's/-/./g')"
 
               if [ "${{ matrix.libc }}" = "musl" ]; then
                 XBPS_ARCH="${{ matrix.arch }}-musl"
