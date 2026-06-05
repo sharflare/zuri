@@ -64,15 +64,16 @@ jobs:
               chmod 0755 "${PKGDIR}/usr/bin/zuri"
 
               xbps-create \
-                --architecture "${XBPS_ARCH}" \
-                --pkgver "zuri-${PKG_VERSION}_1" \
-                --desc "a feature filled alternative to xbps" \
-                --homepage "https://codeberg.org/cassiel-os/zuri" \
-                --license "GPL3" \
-                --maintainer "shar <contact@sharflare.dev>" \
-                --destdir "${PKGDIR}" \
-                zig-out/bin/zuri-${PKG_VERSION}_1.${XBPS_ARCH}.xbps
-              
+                -A "${XBPS_ARCH}" \
+                -n "zuri-${PKG_VERSION}_1" \
+                -s "a feature filled alternative to xbps" \
+                -H "https://codeberg.org/cassiel-os/zuri" \
+                -l "GPL3" \
+                -m "shar <contact@sharflare.dev>" \
+                "${PKGDIR}"
+
+              mv "zuri-${PKG_VERSION}_1.${XBPS_ARCH}.xbps" zig-out/bin/
+
               chown -R $HOST_UID:$HOST_GID .
             '
       - name: Upload artifact
