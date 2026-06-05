@@ -58,20 +58,23 @@ pub fn loadRepos(
         return loadSingleRepo(allocator, base, stderr);
     }
     if (!hasConfigRepos(io)) {
-        try stderr.print("error: no repositories found in /etc/xbps.d/ or ZURI_REPO_URL\n", .{});
+        try stderr.print("error: no repositories found in /etc/xbps.d/, /usr/share/xbps.d/, or ZURI_REPO_URL\n", .{});
         return error.NoReposConfigured;
     }
     return &.{};
 }
 
 fn hasConfigRepos(io: std.Io) bool {
-    var dir = std.Io.Dir.openDirAbsolute(io, "/etc/xbps.d", .{ .iterate = true }) catch return false;
-    defer dir.close(io);
+    const dirs = [_][]const u8{ "/etc/xbps.d", "/usr/share/xbps.d" };
+    for (dirs) |d| {
+        var dir = std.Io.Dir.openDirAbsolute(io, d, .{ .iterate = true }) catch continue;
+        defer dir.close(io);
 
-    var iter = dir.iterate();
-    while (iter.next(io) catch null) |entry| {
-        if (entry.kind == .file and std.mem.endsWith(u8, entry.name, ".conf"))
-            return true;
+        var iter = dir.iterate();
+        while (iter.next(io) catch null) |entry| {
+            if (entry.kind == .file and std.mem.endsWith(u8, entry.name, ".conf"))
+                return true;
+        }
     }
     return false;
 }
